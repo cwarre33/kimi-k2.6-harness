@@ -256,7 +256,7 @@ class IPCBus:
                 writer.write(frame)
                 await writer.drain()
         else:
-            raise ConnectionError("Not connected")
+            logging.warning("IPC send_message dropped: no connection")
 
     async def send_reasoning_plan(self, msg: IPCMessage) -> None:
         """Send a reasoning plan and track its message ID."""
