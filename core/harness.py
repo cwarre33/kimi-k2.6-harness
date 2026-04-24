@@ -49,6 +49,7 @@ class Harness:
         state = TVCState(
             task_id=task_id,
             task_description=task_description,
+            repo_path=repo_path,
             reasoning_plan="",
             tool_history=[],
             injected_skills=[],

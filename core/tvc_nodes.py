@@ -90,7 +90,7 @@ def make_async_execute_node(ipc_bus: Optional[IPCBus] = None):
             "output": "Placeholder execution completed.",
         }
         state["tool_history"].append(placeholder)
-        if ipc_bus is not None:
+        if ipc_bus is not None and ipc_bus.is_connected():
             msg = IPCMessage(
                 msg_id=str(uuid.uuid4()),
                 timestamp_ns=time.time_ns(),
@@ -108,7 +108,7 @@ def make_async_verify_node(ipc_bus: Optional[IPCBus] = None):
     async def async_verify_node(state: TVCState) -> TVCState:
         errors = _evaluate_verification(state)
 
-        if ipc_bus is not None:
+        if ipc_bus is not None and ipc_bus.is_connected():
             if errors:
                 event_type = EventType.LOOP_WARNING
                 payload = {"details": state["verification_details"], "errors": errors}

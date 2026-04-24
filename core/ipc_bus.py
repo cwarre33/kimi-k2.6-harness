@@ -242,6 +242,10 @@ class IPCBus:
         if self.socket_path and os.path.exists(self.socket_path):
             os.unlink(self.socket_path)
 
+    def is_connected(self) -> bool:
+        """Return True if the bus has an active transport."""
+        return self._writer is not None or bool(self._client_writers)
+
     async def send_message(self, msg: IPCMessage) -> None:
         """Send a framed message."""
         data = serialize_message(msg)
@@ -256,7 +260,7 @@ class IPCBus:
                 writer.write(frame)
                 await writer.drain()
         else:
-            logging.warning("IPC send_message dropped: no connection")
+            raise ConnectionError("IPC not connected")
 
     async def send_reasoning_plan(self, msg: IPCMessage) -> None:
         """Send a reasoning plan and track its message ID."""

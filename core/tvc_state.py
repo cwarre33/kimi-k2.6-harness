@@ -14,6 +14,7 @@ class VerificationOutcome(str, Enum):
 class TVCState(TypedDict):
     task_id: str
     task_description: str
+    repo_path: str
     reasoning_plan: str
     tool_history: List[Dict[str, Any]]
     injected_skills: List[str]
