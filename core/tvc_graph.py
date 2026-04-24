@@ -2,13 +2,27 @@
 
 import os
 import sqlite3
+from typing import Optional
 
+import aiosqlite
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from core.tvc_state import TVCState, VerificationOutcome
-from core.tvc_nodes import plan_node, execute_node, verify_node, correct_node
+from core.tvc_nodes import (
+    plan_node,
+    execute_node,
+    verify_node,
+    correct_node,
+    make_async_plan_node,
+    make_async_execute_node,
+    make_async_verify_node,
+    make_async_correct_node,
+)
 from core.tvc_config import CHECKPOINT_DB_PATH
+from core.skill_store import SqliteSkillStore
+from core.ipc_bus import IPCBus
 
 
 def should_continue(state: TVCState) -> str:
@@ -47,5 +61,39 @@ def build_tvc_graph(checkpoint_db_path: str = CHECKPOINT_DB_PATH):
         conn = sqlite3.connect(checkpoint_db_path, check_same_thread=False)
         checkpointer = SqliteSaver(conn)
         checkpointer.setup()
+        return builder.compile(checkpointer=checkpointer)
+    return builder.compile()
+
+
+async def build_async_tvc_graph(
+    checkpoint_db_path: str = CHECKPOINT_DB_PATH,
+    skill_store: Optional[SqliteSkillStore] = None,
+    ipc_bus: Optional[IPCBus] = None,
+):
+    """Build and compile the async TVC StateGraph."""
+    builder = StateGraph(TVCState)
+
+    builder.add_node("plan", make_async_plan_node(skill_store))
+    builder.add_node("execute", make_async_execute_node(ipc_bus))
+    builder.add_node("verify", make_async_verify_node(ipc_bus))
+    builder.add_node("correct", make_async_correct_node(skill_store))
+
+    builder.set_entry_point("plan")
+    builder.add_edge("plan", "execute")
+    builder.add_edge("execute", "verify")
+    builder.add_conditional_edges(
+        "verify",
+        should_continue,
+        {"end": END, "retry": "correct"},
+    )
+    builder.add_edge("correct", "plan")
+
+    if checkpoint_db_path:
+        db_dir = os.path.dirname(checkpoint_db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+        conn = await aiosqlite.connect(checkpoint_db_path)
+        checkpointer = AsyncSqliteSaver(conn)
+        await checkpointer.setup()
         return builder.compile(checkpointer=checkpointer)
     return builder.compile()

@@ -15,7 +15,7 @@ from core.tvc_nodes import (
     make_async_verify_node,
     make_async_correct_node,
 )
-from core.tvc_graph import build_tvc_graph
+from core.tvc_graph import build_tvc_graph, build_async_tvc_graph
 from core.skill_store import SqliteSkillStore
 from core.ipc_bus import IPCBus, IPCRole
 from core.ipc_protocol import EventType
@@ -341,3 +341,59 @@ async def test_async_correct_node_injects_skills(skill_store):
     assert skill_id in result["injected_skills"]
     assert result["failure_count"] == 1
     assert result["verification_outcome"] == VerificationOutcome.PENDING
+
+
+# ---- Async graph tests ----
+
+
+@pytest.mark.asyncio
+async def test_async_graph_runs_to_success(tmp_path):
+    db_path = str(tmp_path / "async_success.sqlite")
+    graph = await build_async_tvc_graph(checkpoint_db_path=db_path)
+    state = TVCState(
+        task_id="task-async-success",
+        task_description="Run a successful async task",
+        reasoning_plan="",
+        tool_history=[{"tool": "deploy", "exit_code": 0, "status": "success"}],
+        injected_skills=[],
+        verification_outcome=VerificationOutcome.PENDING,
+        verification_details=None,
+        failure_analysis="",
+        failure_count=0,
+        max_retries=3,
+        session_id="sess-async-success",
+    )
+    try:
+        result = await graph.ainvoke(
+            state, config={"configurable": {"thread_id": "thread-async-success"}}
+        )
+        assert result["verification_outcome"] == VerificationOutcome.SUCCESS
+    finally:
+        await graph.checkpointer.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_async_graph_retries_on_failure_then_gives_up(tmp_path):
+    db_path = str(tmp_path / "async_fail.sqlite")
+    graph = await build_async_tvc_graph(checkpoint_db_path=db_path)
+    state = TVCState(
+        task_id="task-async-fail",
+        task_description="Run a failing async task",
+        reasoning_plan="",
+        tool_history=[{"tool": "deploy", "exit_code": 1, "status": "success"}],
+        injected_skills=[],
+        verification_outcome=VerificationOutcome.PENDING,
+        verification_details=None,
+        failure_analysis="",
+        failure_count=0,
+        max_retries=2,
+        session_id="sess-async-fail",
+    )
+    try:
+        result = await graph.ainvoke(
+            state, config={"configurable": {"thread_id": "thread-async-fail"}}
+        )
+        assert result["verification_outcome"] == VerificationOutcome.FAILURE
+        assert result["failure_count"] == 2
+    finally:
+        await graph.checkpointer.conn.close()

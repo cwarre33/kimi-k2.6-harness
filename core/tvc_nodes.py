@@ -2,7 +2,7 @@
 
 import time
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from core.ipc_bus import IPCBus
 from core.ipc_protocol import EventType, IPCMessage
@@ -63,22 +63,24 @@ def correct_node(state: TVCState) -> TVCState:
 # ---- Async variants with dependency injection ----
 
 
-def make_async_plan_node(skill_store: SqliteSkillStore):
+def make_async_plan_node(skill_store: Optional[SqliteSkillStore] = None):
     """Return an async plan node that injects skills from *skill_store*."""
     async def async_plan_node(state: TVCState) -> TVCState:
         state["reasoning_plan"] = f"Plan: {state['task_description']}"
-        matches = await skill_store.retrieve_skills(
-            query_text=state["task_description"],
-            query_embedding=None,
-        )
-        state["injected_skills"] = [m.skill_id for m in matches]
-        for m in matches:
-            state["reasoning_plan"] += f"\n- {m.canonical_name} ({m.skill_id})"
+        state["injected_skills"] = []
+        if skill_store is not None:
+            matches = await skill_store.retrieve_skills(
+                query_text=state["task_description"],
+                query_embedding=None,
+            )
+            state["injected_skills"] = [m.skill_id for m in matches]
+            for m in matches:
+                state["reasoning_plan"] += f"\n- {m.canonical_name} ({m.skill_id})"
         return state
     return async_plan_node
 
 
-def make_async_execute_node(ipc_bus: IPCBus):
+def make_async_execute_node(ipc_bus: Optional[IPCBus] = None):
     """Return an async execute node that emits a TOOL_INVOCATION event."""
     async def async_execute_node(state: TVCState) -> TVCState:
         placeholder: Dict[str, Any] = {
@@ -88,57 +90,60 @@ def make_async_execute_node(ipc_bus: IPCBus):
             "output": "Placeholder execution completed.",
         }
         state["tool_history"].append(placeholder)
-        msg = IPCMessage(
-            msg_id=str(uuid.uuid4()),
-            timestamp_ns=time.time_ns(),
-            event_type=EventType.TOOL_INVOCATION,
-            session_id=state["session_id"],
-            payload={"tool": "placeholder", "status": "success"},
-        )
-        await ipc_bus.send_message(msg)
+        if ipc_bus is not None:
+            msg = IPCMessage(
+                msg_id=str(uuid.uuid4()),
+                timestamp_ns=time.time_ns(),
+                event_type=EventType.TOOL_INVOCATION,
+                session_id=state["session_id"],
+                payload={"tool": "placeholder", "status": "success"},
+            )
+            await ipc_bus.send_message(msg)
         return state
     return async_execute_node
 
 
-def make_async_verify_node(ipc_bus: IPCBus):
+def make_async_verify_node(ipc_bus: Optional[IPCBus] = None):
     """Return an async verify node that emits CHECKPOINT or LOOP_WARNING."""
     async def async_verify_node(state: TVCState) -> TVCState:
         errors = _evaluate_verification(state)
 
-        if errors:
-            event_type = EventType.LOOP_WARNING
-            payload = {"details": state["verification_details"], "errors": errors}
-        else:
-            event_type = EventType.CHECKPOINT
-            payload = {"status": "verified"}
+        if ipc_bus is not None:
+            if errors:
+                event_type = EventType.LOOP_WARNING
+                payload = {"details": state["verification_details"], "errors": errors}
+            else:
+                event_type = EventType.CHECKPOINT
+                payload = {"status": "verified"}
 
-        msg = IPCMessage(
-            msg_id=str(uuid.uuid4()),
-            timestamp_ns=time.time_ns(),
-            event_type=event_type,
-            session_id=state["session_id"],
-            payload=payload,
-        )
-        await ipc_bus.send_message(msg)
+            msg = IPCMessage(
+                msg_id=str(uuid.uuid4()),
+                timestamp_ns=time.time_ns(),
+                event_type=event_type,
+                session_id=state["session_id"],
+                payload=payload,
+            )
+            await ipc_bus.send_message(msg)
         return state
     return async_verify_node
 
 
-def make_async_correct_node(skill_store: SqliteSkillStore):
+def make_async_correct_node(skill_store: Optional[SqliteSkillStore] = None):
     """Return an async correct node that injects failure-analysis skills."""
     async def async_correct_node(state: TVCState) -> TVCState:
         state["failure_count"] = state["failure_count"] + 1
         state["failure_analysis"] = "Failure detected; retry required."
         state["verification_outcome"] = VerificationOutcome.PENDING
 
-        details = state.get("verification_details")
-        if details:
-            matches = await skill_store.retrieve_skills(
-                query_text=details,
-                query_embedding=None,
-            )
-            for m in matches:
-                if m.skill_id not in state["injected_skills"]:
-                    state["injected_skills"].append(m.skill_id)
+        if skill_store is not None:
+            details = state.get("verification_details")
+            if details:
+                matches = await skill_store.retrieve_skills(
+                    query_text=details,
+                    query_embedding=None,
+                )
+                for m in matches:
+                    if m.skill_id not in state["injected_skills"]:
+                        state["injected_skills"].append(m.skill_id)
         return state
     return async_correct_node
