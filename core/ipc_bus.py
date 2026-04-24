@@ -4,10 +4,13 @@ import asyncio
 import os
 import socket
 import struct
+import time
+import uuid
 from enum import Enum
 from typing import Optional, Set
 
 from core.ipc_config import (
+    HEARTBEAT_INTERVAL_SECONDS,
     MAX_MESSAGE_SIZE_BYTES,
     SOCKET_TIMEOUT_SECONDS,
     TCP_FALLBACK_HOST,
@@ -39,6 +42,7 @@ class IPCBus:
         self._writer: Optional[asyncio.StreamWriter] = None
         self._client_writers: Set[asyncio.StreamWriter] = set()
         self._listen_task: Optional[asyncio.Task] = None
+        self._heartbeat_task: Optional[asyncio.Task] = None
         self._tasks: Set[asyncio.Task] = set()
         self._connected = False
         self._server_running = False
@@ -146,6 +150,10 @@ class IPCBus:
             self._listen_task = asyncio.create_task(self._read_loop(self._reader))
             self._listen_task.add_done_callback(self._tasks.discard)
             self._tasks.add(self._listen_task)
+            if self.role == IPCRole.CONTROLLER:
+                self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+                self._heartbeat_task.add_done_callback(self._tasks.discard)
+                self._tasks.add(self._heartbeat_task)
             return
 
         # TCP connection
@@ -158,10 +166,36 @@ class IPCBus:
         self._listen_task = asyncio.create_task(self._read_loop(self._reader))
         self._listen_task.add_done_callback(self._tasks.discard)
         self._tasks.add(self._listen_task)
+        if self.role == IPCRole.CONTROLLER:
+            self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+            self._heartbeat_task.add_done_callback(self._tasks.discard)
+            self._tasks.add(self._heartbeat_task)
+
+    async def _heartbeat_loop(self) -> None:
+        while self._connected:
+            try:
+                heartbeat_msg = IPCMessage(
+                    msg_id=str(uuid.uuid4()),
+                    timestamp_ns=time.time_ns(),
+                    event_type=EventType.SESSION_HEARTBEAT,
+                    session_id="heartbeat",
+                    payload={"role": self.role.value},
+                )
+                await self.send_message(heartbeat_msg)
+            except Exception:
+                break
+            await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
     async def disconnect(self) -> None:
         """Disconnect from the server."""
         self._connected = False
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            try:
+                await self._heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            self._heartbeat_task = None
         if self._listen_task:
             self._listen_task.cancel()
             try:

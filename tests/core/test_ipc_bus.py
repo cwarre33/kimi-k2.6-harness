@@ -1,6 +1,7 @@
 """Integration tests for IPC bus."""
 
 import asyncio
+import os
 import tempfile
 
 import pytest
@@ -43,7 +44,19 @@ async def test_client_sends_message_server_receives(ipc_pair):
 
     gen = server.iter_messages()
     received = await asyncio.wait_for(gen.__anext__(), timeout=5.0)
+    while received.event_type == EventType.SESSION_HEARTBEAT:
+        received = await asyncio.wait_for(gen.__anext__(), timeout=5.0)
 
     assert received.msg_id == msg.msg_id
     assert received.event_type == msg.event_type
     assert received.payload == msg.payload
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_timeout_triggers_degraded_mode():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        socket_path = os.path.join(tmpdir, "heartbeat.sock")
+        client = IPCBus(role=IPCRole.CONTROLLER, socket_path=socket_path)
+        with pytest.raises((OSError, ConnectionError)):
+            await client.connect()
+        assert not client._connected
