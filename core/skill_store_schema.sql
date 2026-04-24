@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS skill_retrievals (
     FOREIGN KEY (skill_id) REFERENCES skills(skill_id)
 );
 
+CREATE INDEX IF NOT EXISTS idx_retrievals_skill_id ON skill_retrievals(skill_id);
 CREATE INDEX IF NOT EXISTS idx_skills_deprecated ON skills(is_deprecated, failure_count);
 CREATE INDEX IF NOT EXISTS idx_tags_tag ON skill_tags(tag);
 CREATE INDEX IF NOT EXISTS idx_skills_validated ON skills(last_validated_at);
