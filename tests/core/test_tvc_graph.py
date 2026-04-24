@@ -126,7 +126,6 @@ def test_graph_retries_on_failure_then_gives_up():
 
 
 def test_checkpoint_survives_restart():
-    import tempfile
     import os
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "checkpoints.sqlite")
@@ -187,8 +186,8 @@ async def test_async_plan_node_injects_skills(skill_store):
 
 
 @pytest.mark.asyncio
-async def test_async_execute_node_emits_ipc_event():
-    socket_path = tempfile.mktemp(suffix=".sock")
+async def test_async_execute_node_emits_ipc_event(tmp_path):
+    socket_path = str(tmp_path / "test.sock")
     server = IPCBus(IPCRole.AUDITOR, socket_path=socket_path)
     addr = await server.start_server()
 
@@ -226,3 +225,119 @@ async def test_async_execute_node_emits_ipc_event():
     finally:
         await client.disconnect()
         await server.stop_server()
+
+
+@pytest.mark.asyncio
+async def test_async_verify_node_emits_checkpoint(tmp_path):
+    socket_path = str(tmp_path / "verify.sock")
+    server = IPCBus(IPCRole.AUDITOR, socket_path=socket_path)
+    addr = await server.start_server()
+
+    client = IPCBus(IPCRole.CONTROLLER, socket_path=socket_path)
+    await client.connect(addr)
+
+    try:
+        node = make_async_verify_node(client)
+        state = TVCState(
+            task_id="task-001",
+            task_description="Run a task",
+            reasoning_plan="",
+            tool_history=[{"tool": "deploy", "exit_code": 0, "status": "success"}],
+            injected_skills=[],
+            verification_outcome=VerificationOutcome.PENDING,
+            verification_details=None,
+            failure_analysis="",
+            failure_count=0,
+            max_retries=3,
+            session_id="sess-001",
+        )
+        result = await node(state)
+
+        assert result["verification_outcome"] == VerificationOutcome.SUCCESS
+
+        async def get_next_non_heartbeat():
+            async for msg in server.iter_messages():
+                if msg.event_type != EventType.SESSION_HEARTBEAT:
+                    return msg
+
+        received = await asyncio.wait_for(get_next_non_heartbeat(), timeout=5.0)
+        assert received.event_type == EventType.CHECKPOINT
+        assert received.session_id == "sess-001"
+    finally:
+        await client.disconnect()
+        await server.stop_server()
+
+
+@pytest.mark.asyncio
+async def test_async_verify_node_emits_loop_warning(tmp_path):
+    socket_path = str(tmp_path / "verify_warn.sock")
+    server = IPCBus(IPCRole.AUDITOR, socket_path=socket_path)
+    addr = await server.start_server()
+
+    client = IPCBus(IPCRole.CONTROLLER, socket_path=socket_path)
+    await client.connect(addr)
+
+    try:
+        node = make_async_verify_node(client)
+        state = TVCState(
+            task_id="task-001",
+            task_description="Run a task",
+            reasoning_plan="",
+            tool_history=[{"tool": "deploy", "exit_code": 1, "status": "error"}],
+            injected_skills=[],
+            verification_outcome=VerificationOutcome.PENDING,
+            verification_details=None,
+            failure_analysis="",
+            failure_count=0,
+            max_retries=3,
+            session_id="sess-001",
+        )
+        result = await node(state)
+
+        assert result["verification_outcome"] == VerificationOutcome.FAILURE
+
+        async def get_next_non_heartbeat():
+            async for msg in server.iter_messages():
+                if msg.event_type != EventType.SESSION_HEARTBEAT:
+                    return msg
+
+        received = await asyncio.wait_for(get_next_non_heartbeat(), timeout=5.0)
+        assert received.event_type == EventType.LOOP_WARNING
+        assert received.session_id == "sess-001"
+    finally:
+        await client.disconnect()
+        await server.stop_server()
+
+
+@pytest.mark.asyncio
+async def test_async_correct_node_injects_skills(skill_store):
+    skill_id = await skill_store.store_skill(
+        canonical_name="error-fix",
+        task_pattern="error detected",
+        tool_sequence=[{"tool": "shell.exec", "args": {"command": "echo fixed"}}],
+        thought_trace="Fix the error.",
+        code_artifact=None,
+        context_requirements={},
+        tags=["error", "fix"],
+    )
+    await skill_store.validate_skill(skill_id, "success", session_id="sess-001")
+
+    node = make_async_correct_node(skill_store)
+    state = TVCState(
+        task_id="task-001",
+        task_description="Run a task",
+        reasoning_plan="",
+        tool_history=[],
+        injected_skills=[],
+        verification_outcome=VerificationOutcome.FAILURE,
+        verification_details="error detected",
+        failure_analysis="",
+        failure_count=0,
+        max_retries=3,
+        session_id="sess-001",
+    )
+    result = await node(state)
+
+    assert skill_id in result["injected_skills"]
+    assert result["failure_count"] == 1
+    assert result["verification_outcome"] == VerificationOutcome.PENDING

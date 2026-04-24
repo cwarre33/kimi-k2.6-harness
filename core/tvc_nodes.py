@@ -2,9 +2,11 @@
 
 import time
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Dict
 
+from core.ipc_bus import IPCBus
 from core.ipc_protocol import EventType, IPCMessage
+from core.skill_store import SqliteSkillStore
 from core.tvc_state import TVCState, VerificationOutcome
 
 
@@ -27,8 +29,8 @@ def execute_node(state: TVCState) -> TVCState:
     return state
 
 
-def verify_node(state: TVCState) -> TVCState:
-    """Check tool_history for errors and set verification outcome."""
+def _evaluate_verification(state: TVCState) -> list[str]:
+    """Check tool_history for errors, update verification fields, and return errors."""
     errors = []
     for entry in state["tool_history"]:
         if entry.get("status") == "error" or entry.get("exit_code", 0) != 0:
@@ -41,6 +43,12 @@ def verify_node(state: TVCState) -> TVCState:
         state["verification_outcome"] = VerificationOutcome.SUCCESS
         state["verification_details"] = None
 
+    return errors
+
+
+def verify_node(state: TVCState) -> TVCState:
+    """Check tool_history for errors and set verification outcome."""
+    _evaluate_verification(state)
     return state
 
 
@@ -55,7 +63,7 @@ def correct_node(state: TVCState) -> TVCState:
 # ---- Async variants with dependency injection ----
 
 
-def make_async_plan_node(skill_store):
+def make_async_plan_node(skill_store: SqliteSkillStore):
     """Return an async plan node that injects skills from *skill_store*."""
     async def async_plan_node(state: TVCState) -> TVCState:
         state["reasoning_plan"] = f"Plan: {state['task_description']}"
@@ -70,7 +78,7 @@ def make_async_plan_node(skill_store):
     return async_plan_node
 
 
-def make_async_execute_node(ipc_bus):
+def make_async_execute_node(ipc_bus: IPCBus):
     """Return an async execute node that emits a TOOL_INVOCATION event."""
     async def async_execute_node(state: TVCState) -> TVCState:
         placeholder: Dict[str, Any] = {
@@ -92,22 +100,15 @@ def make_async_execute_node(ipc_bus):
     return async_execute_node
 
 
-def make_async_verify_node(ipc_bus):
+def make_async_verify_node(ipc_bus: IPCBus):
     """Return an async verify node that emits CHECKPOINT or LOOP_WARNING."""
     async def async_verify_node(state: TVCState) -> TVCState:
-        errors = []
-        for entry in state["tool_history"]:
-            if entry.get("status") == "error" or entry.get("exit_code", 0) != 0:
-                errors.append(str(entry))
+        errors = _evaluate_verification(state)
 
         if errors:
-            state["verification_outcome"] = VerificationOutcome.FAILURE
-            state["verification_details"] = "; ".join(errors)
             event_type = EventType.LOOP_WARNING
             payload = {"details": state["verification_details"], "errors": errors}
         else:
-            state["verification_outcome"] = VerificationOutcome.SUCCESS
-            state["verification_details"] = None
             event_type = EventType.CHECKPOINT
             payload = {"status": "verified"}
 
@@ -123,7 +124,7 @@ def make_async_verify_node(ipc_bus):
     return async_verify_node
 
 
-def make_async_correct_node(skill_store):
+def make_async_correct_node(skill_store: SqliteSkillStore):
     """Return an async correct node that injects failure-analysis skills."""
     async def async_correct_node(state: TVCState) -> TVCState:
         state["failure_count"] = state["failure_count"] + 1
