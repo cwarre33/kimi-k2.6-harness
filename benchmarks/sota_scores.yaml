@@ -1,0 +1,36 @@
+swe_bench_verified:
+  top_open_source:
+    system: "OpenHands + Claude 3.5 Sonnet"
+    score: 0.56
+    date: "2025-03-15"
+  top_closed:
+    system: "o1 + custom harness"
+    score: 0.68
+    date: "2025-02-01"
+  our_target:
+    score: 0.60
+    note: "Minimum viable score before production use"
+
+terminal_bench_2_0:
+  top_open_source:
+    system: "OpenHands runtime"
+    score: 0.45
+    date: "2025-01-20"
+  our_target:
+    score: 0.50
+
+browsecomp:
+  top_open_source:
+    system: "BrowserGym + GPT-4o"
+    score: 0.72
+    date: "2025-04-01"
+  our_target:
+    score: 0.65
+
+gaia:
+  top_open_source:
+    system: "AutoGPT + GPT-4o"
+    score: 0.38
+    date: "2025-03-10"
+  our_target:
+    score: 0.40
