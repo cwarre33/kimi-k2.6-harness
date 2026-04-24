@@ -7,6 +7,7 @@ import pytest
 from benchmarks.eval_orchestrator import EvalOrchestrator
 from benchmarks.sota_scores import load_sota_scores
 from benchmarks.swe_bench_adapter import SWEBenchAdapter
+from benchmarks.terminal_bench_adapter import TerminalBenchAdapter
 from core.harness import Harness
 
 
@@ -68,3 +69,18 @@ async def test_adapter_evaluates_instance_with_harness(tmp_path):
         assert isinstance(result["resolved"], bool)
     finally:
         await harness.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_terminal_bench_mock_score_computed():
+    adapter = TerminalBenchAdapter(repo_path=".", mock_mode=True)
+    instances = [
+        {"instance_id": "t1", "expected_resolved": True},
+        {"instance_id": "t2", "expected_resolved": False},
+        {"instance_id": "t3", "expected_resolved": True},
+    ]
+    result = await adapter.evaluate_dataset(instances)
+    assert result["benchmark"] == "terminal_bench_2_0"
+    assert result["total"] == 3
+    assert result["resolved"] == 2
+    assert result["score"] == pytest.approx(2 / 3)
