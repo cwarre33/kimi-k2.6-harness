@@ -4,6 +4,7 @@ import pytest
 
 from core.tvc_state import TVCState, VerificationOutcome
 from core.tvc_nodes import plan_node, verify_node
+from core.tvc_graph import build_tvc_graph
 
 
 def test_state_creation():
@@ -60,3 +61,42 @@ def test_verify_node_detects_failure():
     )
     result = verify_node(state)
     assert result["verification_outcome"] == VerificationOutcome.FAILURE
+
+
+def test_graph_runs_to_success():
+    graph = build_tvc_graph()
+    state = TVCState(
+        task_id="task-success",
+        task_description="Run a successful task",
+        reasoning_plan="",
+        tool_history=[{"tool": "deploy", "exit_code": 0, "status": "success"}],
+        injected_skills=[],
+        verification_outcome=VerificationOutcome.PENDING,
+        verification_details=None,
+        failure_analysis="",
+        failure_count=0,
+        max_retries=3,
+        session_id="sess-success",
+    )
+    result = graph.invoke(state)
+    assert result["verification_outcome"] == VerificationOutcome.SUCCESS
+
+
+def test_graph_retries_on_failure_then_gives_up():
+    graph = build_tvc_graph()
+    state = TVCState(
+        task_id="task-fail",
+        task_description="Run a failing task",
+        reasoning_plan="",
+        tool_history=[{"tool": "deploy", "exit_code": 1, "status": "success"}],
+        injected_skills=[],
+        verification_outcome=VerificationOutcome.PENDING,
+        verification_details=None,
+        failure_analysis="",
+        failure_count=0,
+        max_retries=2,
+        session_id="sess-fail",
+    )
+    result = graph.invoke(state)
+    assert result["verification_outcome"] == VerificationOutcome.FAILURE
+    assert result["failure_count"] == 2
