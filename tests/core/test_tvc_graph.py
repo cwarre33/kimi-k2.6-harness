@@ -78,7 +78,7 @@ def test_graph_runs_to_success():
         max_retries=3,
         session_id="sess-success",
     )
-    result = graph.invoke(state)
+    result = graph.invoke(state, config={"configurable": {"thread_id": "thread-success"}})
     assert result["verification_outcome"] == VerificationOutcome.SUCCESS
 
 
@@ -97,6 +97,31 @@ def test_graph_retries_on_failure_then_gives_up():
         max_retries=2,
         session_id="sess-fail",
     )
-    result = graph.invoke(state)
+    result = graph.invoke(state, config={"configurable": {"thread_id": "thread-fail"}})
     assert result["verification_outcome"] == VerificationOutcome.FAILURE
     assert result["failure_count"] == 2
+
+
+def test_checkpoint_survives_restart():
+    import tempfile
+    import os
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "checkpoints.sqlite")
+        graph = build_tvc_graph(checkpoint_db_path=db_path)
+        state = TVCState(
+            task_id="task-checkpoint",
+            task_description="Checkpoint test",
+            reasoning_plan="",
+            tool_history=[{"tool": "shell.exec", "status": "completed", "exit_code": 0}],
+            injected_skills=[],
+            verification_outcome=VerificationOutcome.PENDING,
+            verification_details=None,
+            failure_analysis="",
+            failure_count=0,
+            max_retries=3,
+            session_id="sess-001",
+        )
+        result = graph.invoke(state, config={"configurable": {"thread_id": "thread-1"}})
+        assert result["verification_outcome"] == VerificationOutcome.SUCCESS
+        assert os.path.exists(db_path)
+        graph.checkpointer.conn.close()

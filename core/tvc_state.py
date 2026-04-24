@@ -4,7 +4,7 @@ from typing import TypedDict, List, Dict, Any, Optional
 from enum import Enum
 
 
-class VerificationOutcome(Enum):
+class VerificationOutcome(str, Enum):
     PENDING = "pending"
     SUCCESS = "success"
     FAILURE = "failure"
