@@ -1,6 +1,7 @@
 """Async IPC client/server with Unix domain sockets and TCP fallback."""
 
 import asyncio
+import logging
 import os
 import socket
 import struct
@@ -47,6 +48,7 @@ class IPCBus:
         self._connected = False
         self._server_running = False
         self._tcp_address: Optional[tuple[str, int]] = None
+        self._last_plan_msg_id: Optional[str] = None
 
     async def start_server(self) -> Optional[str | tuple[str, int]]:
         """Start the IPC server.
@@ -255,6 +257,19 @@ class IPCBus:
                 await writer.drain()
         else:
             raise ConnectionError("Not connected")
+
+    async def send_reasoning_plan(self, msg: IPCMessage) -> None:
+        """Send a reasoning plan and track its message ID."""
+        self._last_plan_msg_id = msg.msg_id
+        await self.send_message(msg)
+
+    async def send_tool_invocation(self, msg: IPCMessage) -> None:
+        """Send a tool invocation, auto-linking to the last reasoning plan."""
+        if msg.reply_to is None and self._last_plan_msg_id is not None:
+            msg.reply_to = self._last_plan_msg_id
+        elif self._last_plan_msg_id is None:
+            logging.warning("Tool invocation sent without a reasoning plan")
+        await self.send_message(msg)
 
     async def iter_messages(self):
         """Async generator yielding consumed messages from the queue."""

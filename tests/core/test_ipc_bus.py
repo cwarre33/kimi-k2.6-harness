@@ -60,3 +60,42 @@ async def test_heartbeat_timeout_triggers_degraded_mode():
         with pytest.raises((OSError, ConnectionError)):
             await client.connect()
         assert not client._connected
+
+
+@pytest.mark.asyncio
+async def test_tool_invocation_without_plan_raises_warning(ipc_pair):
+    client, server = ipc_pair
+    received_messages = []
+
+    async def collector():
+        async for msg in server.iter_messages():
+            if msg.event_type == EventType.SESSION_HEARTBEAT:
+                continue
+            received_messages.append(msg)
+            if len(received_messages) >= 2:
+                break
+
+    task = asyncio.create_task(collector())
+
+    plan_msg = IPCMessage(
+        msg_id="plan-001",
+        timestamp_ns=1_700_000_000_000_000_000,
+        event_type=EventType.REASONING_PLAN,
+        session_id="sess-001",
+        payload={"plan": "run pytest"},
+    )
+    await client.send_reasoning_plan(plan_msg)
+
+    invocation_msg = IPCMessage(
+        msg_id="inv-001",
+        timestamp_ns=1_700_000_000_000_000_001,
+        event_type=EventType.TOOL_INVOCATION,
+        session_id="sess-001",
+        payload={"tool_name": "shell.exec"},
+    )
+    await client.send_tool_invocation(invocation_msg)
+
+    await asyncio.wait_for(task, timeout=2.0)
+
+    assert received_messages[1].event_type == EventType.TOOL_INVOCATION
+    assert received_messages[1].reply_to == "plan-001"
