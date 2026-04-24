@@ -1,3 +1,4 @@
+import hashlib
 import pytest
 import pytest_asyncio
 import aiosqlite
@@ -136,3 +137,36 @@ async def test_validate_skill_updates_counters(skill_store):
 
     assert matches[0].success_count == 1
     assert matches[0].failure_count == 1
+
+
+# ---- Task 4 tests ----
+
+@pytest.mark.asyncio
+async def test_vacuum_removes_old_deprecated_skills(skill_store):
+    old_skill_id = await skill_store.store_skill(
+        canonical_name="old-skill",
+        task_pattern="Old pattern",
+        tool_sequence=[],
+        thought_trace="old trace",
+        code_artifact=None,
+        context_requirements={},
+        tags=["old"],
+    )
+
+    await skill_store.validate_skill(old_skill_id, "failure", session_id="s1")
+    await skill_store.validate_skill(old_skill_id, "failure", session_id="s2")
+    await skill_store.validate_skill(old_skill_id, "failure", session_id="s3")
+
+    cursor = await skill_store._db.execute(
+        "UPDATE skills SET created_at = datetime('now', '-31 days') WHERE skill_id = ?",
+        (old_skill_id,),
+    )
+    await skill_store._db.commit()
+
+    deleted_count = await skill_store.vacuum_deprecated(max_age_days=30)
+    assert deleted_count == 1
+
+    result = await skill_store.get_skill_by_hash(
+        hashlib.sha256("old trace".encode("utf-8")).hexdigest()
+    )
+    assert result is None
