@@ -74,6 +74,13 @@ class SqliteSkillStore:
     async def initialize(self) -> None:
         """Open the database and apply the schema."""
         self._db = await aiosqlite.connect(self.db_path)
+        cursor = await self._db.execute("PRAGMA user_version")
+        row = await cursor.fetchone()
+        db_version = row[0] if row else 0
+        if db_version > 1:
+            raise RuntimeError(
+                f"Database schema version {db_version} exceeds harness supported version 1"
+            )
         schema_path = Path(__file__).parent / "skill_store_schema.sql"
         await self._db.executescript(schema_path.read_text())
         await self._db.commit()

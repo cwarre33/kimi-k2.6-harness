@@ -170,3 +170,28 @@ async def test_vacuum_removes_old_deprecated_skills(skill_store):
         hashlib.sha256("old trace".encode("utf-8")).hexdigest()
     )
     assert result is None
+
+
+# ---- Task 5 tests ----
+
+@pytest.mark.asyncio
+async def test_schema_version_read(skill_store):
+    cursor = await skill_store._db.execute("PRAGMA user_version")
+    row = await cursor.fetchone()
+    assert row[0] == 1
+
+
+@pytest.mark.asyncio
+async def test_schema_version_mismatch_raises(tmp_path):
+    db_path = tmp_path / "skills.db"
+    store = SqliteSkillStore(str(db_path))
+    store._db = await aiosqlite.connect(str(db_path))
+    await store._db.execute("PRAGMA user_version = 2")
+    await store._db.commit()
+    await store._db.close()
+    store._db = None
+
+    with pytest.raises(RuntimeError, match="Database schema version 2 exceeds harness supported version 1"):
+        await store.initialize()
+
+    await store.close()
