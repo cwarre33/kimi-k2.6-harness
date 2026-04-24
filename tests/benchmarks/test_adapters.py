@@ -7,6 +7,7 @@ import pytest
 from benchmarks.eval_orchestrator import EvalOrchestrator
 from benchmarks.sota_scores import load_sota_scores
 from benchmarks.swe_bench_adapter import SWEBenchAdapter
+from benchmarks.browsecomp_adapter import BrowseCompAdapter
 from benchmarks.terminal_bench_adapter import TerminalBenchAdapter
 from core.harness import Harness
 
@@ -81,6 +82,21 @@ async def test_terminal_bench_mock_score_computed():
     ]
     result = await adapter.evaluate_dataset(instances)
     assert result["benchmark"] == "terminal_bench_2_0"
+    assert result["total"] == 3
+    assert result["resolved"] == 2
+    assert result["score"] == pytest.approx(2 / 3)
+
+
+@pytest.mark.asyncio
+async def test_browsecomp_mock_score_computed():
+    adapter = BrowseCompAdapter(repo_path=".", mock_mode=True)
+    instances = [
+        {"instance_id": "b1", "expected_resolved": True},
+        {"instance_id": "b2", "expected_resolved": True},
+        {"instance_id": "b3", "expected_resolved": False},
+    ]
+    result = await adapter.evaluate_dataset(instances)
+    assert result["benchmark"] == "browsecomp"
     assert result["total"] == 3
     assert result["resolved"] == 2
     assert result["score"] == pytest.approx(2 / 3)
