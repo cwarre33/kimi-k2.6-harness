@@ -1,8 +1,19 @@
 import pytest
+import pytest_asyncio
 import aiosqlite
 from pathlib import Path
 
+from core.skill_store import SqliteSkillStore
+
 SCHEMA_PATH = Path(__file__).parent.parent.parent / "core" / "skill_store_schema.sql"
+
+@pytest_asyncio.fixture
+async def skill_store(tmp_path):
+    db_path = tmp_path / "skills.db"
+    store = SqliteSkillStore(str(db_path))
+    await store.initialize()
+    yield store
+    await store.close()
 
 @pytest.mark.asyncio
 async def test_schema_creates_all_tables(tmp_path):
@@ -72,3 +83,56 @@ async def test_foreign_key_cascade_delete(tmp_path):
             "SELECT 1 FROM skill_bodies WHERE skill_id = 'skill-1'"
         )
         assert await cursor.fetchone() is None
+
+
+# ---- Task 3 tests ----
+
+@pytest.mark.asyncio
+async def test_store_and_retrieve_skill(skill_store):
+    skill_id = await skill_store.store_skill(
+        canonical_name="test-skill",
+        task_pattern="Run pytest on modified files",
+        tool_sequence=[{"tool": "shell.exec", "args": {"command": "pytest -v"}}],
+        thought_trace="I need to run tests to verify the changes.",
+        code_artifact=None,
+        context_requirements={"dependencies": ["pytest"]},
+        tags=["testing", "pytest"],
+    )
+
+    assert isinstance(skill_id, str)
+    assert len(skill_id) > 0
+
+    matches = await skill_store.retrieve_skills(
+        query_text="pytest",
+        query_embedding=None,
+        top_k=3,
+    )
+
+    assert len(matches) == 1
+    assert matches[0].canonical_name == "test-skill"
+    assert matches[0].success_count == 0
+
+
+@pytest.mark.asyncio
+async def test_validate_skill_updates_counters(skill_store):
+    skill_id = await skill_store.store_skill(
+        canonical_name="validate-test",
+        task_pattern="Test validation",
+        tool_sequence=[],
+        thought_trace="trace",
+        code_artifact=None,
+        context_requirements={},
+        tags=["test"],
+    )
+
+    await skill_store.validate_skill(skill_id, "success", session_id="sess-1")
+    await skill_store.validate_skill(skill_id, "failure", session_id="sess-2")
+
+    matches = await skill_store.retrieve_skills(
+        query_text="test",
+        query_embedding=None,
+        top_k=3,
+    )
+
+    assert matches[0].success_count == 1
+    assert matches[0].failure_count == 1
