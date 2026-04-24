@@ -7,6 +7,7 @@ import pytest
 from benchmarks.eval_orchestrator import EvalOrchestrator
 from benchmarks.sota_scores import load_sota_scores
 from benchmarks.swe_bench_adapter import SWEBenchAdapter
+from core.harness import Harness
 
 
 def test_load_sota_scores_has_swe_bench():
@@ -44,3 +45,26 @@ def test_orchestrator_proceeds_when_score_above_target():
     comparison = orch.compare_to_sota("swe_bench_verified", 0.65)
     assert comparison["passed_target"] is True
     assert comparison["recommendation"] == "PROCEED"
+
+
+@pytest.mark.asyncio
+async def test_adapter_evaluates_instance_with_harness(tmp_path):
+    skill_db = tmp_path / "skills.db"
+    checkpoint_db = tmp_path / "checkpoints.sqlite"
+    harness = Harness(
+        skill_db_path=str(skill_db),
+        checkpoint_db_path=str(checkpoint_db),
+    )
+    await harness.initialize()
+    try:
+        adapter = SWEBenchAdapter(repo_path=str(tmp_path), harness=harness)
+        result = await adapter.evaluate_instance(
+            instance_id="test-instance-001",
+            patch="",
+        )
+        assert "instance_id" in result
+        assert result["instance_id"] == "test-instance-001"
+        assert "resolved" in result
+        assert isinstance(result["resolved"], bool)
+    finally:
+        await harness.shutdown()
