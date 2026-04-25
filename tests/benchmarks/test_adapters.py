@@ -8,6 +8,7 @@ from benchmarks.eval_orchestrator import EvalOrchestrator
 from benchmarks.sota_scores import load_sota_scores
 from benchmarks.swe_bench_adapter import SWEBenchAdapter
 from benchmarks.browsecomp_adapter import BrowseCompAdapter
+from benchmarks.gaia_adapter import GAIAAdapter
 from benchmarks.terminal_bench_adapter import TerminalBenchAdapter
 from core.harness import Harness
 
@@ -100,3 +101,68 @@ async def test_browsecomp_mock_score_computed():
     assert result["total"] == 3
     assert result["resolved"] == 2
     assert result["score"] == pytest.approx(2 / 3)
+
+
+@pytest.mark.asyncio
+async def test_gaia_mock_score_computed():
+    adapter = GAIAAdapter(repo_path=".", mock_mode=True)
+    instances = [
+        {"instance_id": "g1", "expected_resolved": True},
+        {"instance_id": "g2", "expected_resolved": False},
+    ]
+    result = await adapter.evaluate_dataset(instances)
+    assert result["benchmark"] == "gaia"
+    assert result["total"] == 2
+    assert result["resolved"] == 1
+    assert result["score"] == pytest.approx(0.5)
+
+
+@pytest.mark.asyncio
+async def test_full_suite_passes_with_mock_scores():
+    orch = EvalOrchestrator()
+    report = await orch.run_full_suite(
+        mock_instances={
+            "swe_bench_verified": [
+                {"instance_id": "s1", "expected_resolved": True},
+                {"instance_id": "s2", "expected_resolved": True},
+            ],
+            "terminal_bench_2_0": [
+                {"instance_id": "t1", "expected_resolved": True},
+            ],
+            "browsecomp": [
+                {"instance_id": "b1", "expected_resolved": True},
+            ],
+            "gaia": [
+                {"instance_id": "g1", "expected_resolved": True},
+            ],
+        },
+    )
+    assert report["overall_passed"] is True
+    assert report["benchmarks"]["swe_bench_verified"]["passed_target"] is True
+    assert report["benchmarks"]["terminal_bench_2_0"]["passed_target"] is True
+    assert report["benchmarks"]["browsecomp"]["passed_target"] is True
+    assert report["benchmarks"]["gaia"]["passed_target"] is True
+
+
+@pytest.mark.asyncio
+async def test_full_suite_fails_when_any_score_below_target():
+    orch = EvalOrchestrator()
+    report = await orch.run_full_suite(
+        mock_instances={
+            "swe_bench_verified": [
+                {"instance_id": "s1", "expected_resolved": False},
+            ],
+            "terminal_bench_2_0": [
+                {"instance_id": "t1", "expected_resolved": True},
+            ],
+            "browsecomp": [
+                {"instance_id": "b1", "expected_resolved": True},
+            ],
+            "gaia": [
+                {"instance_id": "g1", "expected_resolved": True},
+            ],
+        },
+    )
+    assert report["overall_passed"] is False
+    assert report["benchmarks"]["swe_bench_verified"]["passed_target"] is False
+    assert report["benchmarks"]["swe_bench_verified"]["recommendation"] == "BLOCKED — score below target"

@@ -3,7 +3,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from benchmarks.sota_scores import load_sota_scores
 
@@ -55,9 +55,14 @@ class EvalOrchestrator:
         logger.info(f"Evaluation report saved to {path}")
         return path
 
-    async def run_full_suite(self, harness) -> Dict[str, Any]:
+    async def run_full_suite(
+        self, harness=None, mock_instances: Optional[Dict[str, List[Dict[str, Any]]]] = None
+    ) -> Dict[str, Any]:
         """Run all benchmark adapters and produce unified report."""
         from benchmarks.swe_bench_adapter import SWEBenchAdapter
+        from benchmarks.terminal_bench_adapter import TerminalBenchAdapter
+        from benchmarks.browsecomp_adapter import BrowseCompAdapter
+        from benchmarks.gaia_adapter import GAIAAdapter
 
         report = {
             "harness_version": "0.1.0",
@@ -65,10 +70,58 @@ class EvalOrchestrator:
             "overall_passed": False,
         }
 
-        swe = SWEBenchAdapter(repo_path=".", harness=harness)
-        swe_result = await swe.evaluate_dataset([])
+        mock_instances = mock_instances or {}
+
+        # SWE-bench Verified
+        swe = SWEBenchAdapter(
+            repo_path=".",
+            harness=harness if not mock_instances.get("swe_bench_verified") else None,
+            mock_mode=bool(mock_instances.get("swe_bench_verified")),
+        )
+        swe_result = await swe.evaluate_dataset(
+            mock_instances.get("swe_bench_verified", [])
+        )
         report["benchmarks"]["swe_bench_verified"] = self.compare_to_sota(
             "swe_bench_verified", swe_result["score"]
+        )
+
+        # Terminal-Bench 2.0
+        terminal = TerminalBenchAdapter(
+            repo_path=".",
+            harness=harness if not mock_instances.get("terminal_bench_2_0") else None,
+            mock_mode=bool(mock_instances.get("terminal_bench_2_0")),
+        )
+        terminal_result = await terminal.evaluate_dataset(
+            mock_instances.get("terminal_bench_2_0", [])
+        )
+        report["benchmarks"]["terminal_bench_2_0"] = self.compare_to_sota(
+            "terminal_bench_2_0", terminal_result["score"]
+        )
+
+        # BrowseComp
+        browse = BrowseCompAdapter(
+            repo_path=".",
+            harness=harness if not mock_instances.get("browsecomp") else None,
+            mock_mode=bool(mock_instances.get("browsecomp")),
+        )
+        browse_result = await browse.evaluate_dataset(
+            mock_instances.get("browsecomp", [])
+        )
+        report["benchmarks"]["browsecomp"] = self.compare_to_sota(
+            "browsecomp", browse_result["score"]
+        )
+
+        # GAIA
+        gaia = GAIAAdapter(
+            repo_path=".",
+            harness=harness if not mock_instances.get("gaia") else None,
+            mock_mode=bool(mock_instances.get("gaia")),
+        )
+        gaia_result = await gaia.evaluate_dataset(
+            mock_instances.get("gaia", [])
+        )
+        report["benchmarks"]["gaia"] = self.compare_to_sota(
+            "gaia", gaia_result["score"]
         )
 
         report["overall_passed"] = all(

@@ -1,4 +1,4 @@
-"""SWE-bench evaluation adapter."""
+"""GAIA evaluation adapter."""
 
 import logging
 from pathlib import Path
@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-class SWEBenchAdapter:
-    """Maps TVC loop output to SWE-bench evaluation protocol."""
+class GAIAAdapter:
+    """Maps TVC loop output to GAIA evaluation protocol."""
 
     def __init__(self, repo_path: str, harness=None, mock_mode: bool = False):
         self.repo_path = Path(repo_path)
@@ -17,10 +17,10 @@ class SWEBenchAdapter:
         self.results: List[Dict[str, Any]] = []
 
     async def evaluate_instance(
-        self, instance_id: str, patch: str
+        self, instance_id: str, question: str
     ) -> Dict[str, Any]:
-        """Evaluate a single SWE-bench instance."""
-        logger.info(f"Evaluating SWE-bench instance {instance_id}")
+        """Evaluate a single GAIA instance."""
+        logger.info(f"Evaluating GAIA instance {instance_id}")
 
         if self.mock_mode:
             return {
@@ -38,7 +38,7 @@ class SWEBenchAdapter:
 
         state = await self.harness.run_task(
             task_id=instance_id,
-            task_description=f"Fix the issue described in {instance_id}",
+            task_description=f"Answer the question for {instance_id}",
             repo_path=str(self.repo_path),
         )
 
@@ -52,7 +52,7 @@ class SWEBenchAdapter:
     async def evaluate_dataset(
         self, instances: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Evaluate a dataset of SWE-bench instances."""
+        """Evaluate a dataset of GAIA instances."""
         resolved_count = 0
         total = len(instances)
 
@@ -66,7 +66,7 @@ class SWEBenchAdapter:
                 }
             else:
                 result = await self.evaluate_instance(
-                    inst["instance_id"], inst.get("patch", "")
+                    inst["instance_id"], inst.get("question", "")
                 )
             self.results.append(result)
             if result["resolved"]:
@@ -74,7 +74,7 @@ class SWEBenchAdapter:
 
         score = resolved_count / total if total > 0 else 0.0
         return {
-            "benchmark": "swe_bench_verified",
+            "benchmark": "gaia",
             "total": total,
             "resolved": resolved_count,
             "score": score,
