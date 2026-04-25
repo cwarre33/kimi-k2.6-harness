@@ -9,6 +9,7 @@ from core.ipc_bus import IPCBus, IPCRole
 from core.tvc_graph import build_async_tvc_graph
 from core.tvc_state import TVCState, VerificationOutcome
 from core.tvc_config import CHECKPOINT_DB_PATH
+from core.ollama_client import OllamaClient
 
 
 class Harness:
@@ -19,12 +20,14 @@ class Harness:
         skill_db_path: str,
         socket_path: Optional[str] = None,
         checkpoint_db_path: Optional[str] = None,
+        ollama_client: Optional[OllamaClient] = None,
     ):
         self.skill_db_path = skill_db_path
         self.socket_path = socket_path
         self.checkpoint_db_path = checkpoint_db_path or CHECKPOINT_DB_PATH
         self.skill_store = SqliteSkillStore(self.skill_db_path)
         self.ipc_bus = IPCBus(IPCRole.CONTROLLER, socket_path=self.socket_path)
+        self.ollama_client = ollama_client or OllamaClient()
 
     async def initialize(self) -> None:
         """Open the skill store database and start the IPC bus server."""
@@ -32,9 +35,10 @@ class Harness:
         await self.ipc_bus.start_server()
 
     async def shutdown(self) -> None:
-        """Close the skill store and stop the IPC bus server."""
+        """Close the skill store, stop the IPC bus server, and close the Ollama client."""
         await self.skill_store.close()
         await self.ipc_bus.stop_server()
+        await self.ollama_client.close()
 
     async def run_task(
         self, task_id: str, task_description: str, repo_path: str
@@ -43,6 +47,7 @@ class Harness:
         graph = await build_async_tvc_graph(
             skill_store=self.skill_store,
             ipc_bus=self.ipc_bus,
+            model_client=self.ollama_client,
             checkpoint_db_path=self.checkpoint_db_path,
         )
 

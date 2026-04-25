@@ -23,6 +23,7 @@ from core.tvc_nodes import (
 from core.tvc_config import CHECKPOINT_DB_PATH
 from core.skill_store import SqliteSkillStore
 from core.ipc_bus import IPCBus
+from core.ollama_client import OllamaClient
 
 
 def should_continue(state: TVCState) -> str:
@@ -69,14 +70,15 @@ async def build_async_tvc_graph(
     checkpoint_db_path: str = CHECKPOINT_DB_PATH,
     skill_store: Optional[SqliteSkillStore] = None,
     ipc_bus: Optional[IPCBus] = None,
+    model_client: Optional[OllamaClient] = None,
 ):
     """Build and compile the async TVC StateGraph."""
     builder = StateGraph(TVCState)
 
-    builder.add_node("plan", make_async_plan_node(skill_store))
-    builder.add_node("execute", make_async_execute_node(ipc_bus))
+    builder.add_node("plan", make_async_plan_node(skill_store, model_client))
+    builder.add_node("execute", make_async_execute_node(ipc_bus, model_client))
     builder.add_node("verify", make_async_verify_node(ipc_bus))
-    builder.add_node("correct", make_async_correct_node(skill_store))
+    builder.add_node("correct", make_async_correct_node(skill_store, model_client))
 
     builder.set_entry_point("plan")
     builder.add_edge("plan", "execute")

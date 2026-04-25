@@ -3,6 +3,7 @@
 import asyncio
 import tempfile
 
+import httpx
 import pytest
 import pytest_asyncio
 
@@ -19,6 +20,7 @@ from core.tvc_graph import build_tvc_graph, build_async_tvc_graph
 from core.skill_store import SqliteSkillStore
 from core.ipc_bus import IPCBus, IPCRole
 from core.ipc_protocol import EventType
+from core.ollama_client import OllamaClient
 
 
 @pytest_asyncio.fixture
@@ -397,3 +399,40 @@ async def test_async_graph_retries_on_failure_then_gives_up(tmp_path):
         assert result["failure_count"] == 2
     finally:
         await graph.checkpointer.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_async_plan_node_calls_ollama():
+    import json
+
+    async def handler(request):
+        body = json.loads(await request.aread())
+        assert "Fix the bug" in body["prompt"]
+        return httpx.Response(200, json={"response": "1. Read files\n2. Run tests", "done": True})
+
+    transport = httpx.MockTransport(handler)
+    client = OllamaClient()
+    client._client = httpx.AsyncClient(
+        base_url="http://localhost:11434",
+        headers=client._client.headers,
+        transport=transport,
+    )
+
+    plan_node = make_async_plan_node(model_client=client)
+    state = TVCState(
+        task_id="task-001",
+        task_description="Fix the bug",
+        repo_path=".",
+        reasoning_plan="",
+        tool_history=[],
+        injected_skills=[],
+        verification_outcome=VerificationOutcome.PENDING,
+        verification_details=None,
+        failure_analysis="",
+        failure_count=0,
+        max_retries=3,
+        session_id="sess-001",
+    )
+    result = await plan_node(state)
+    assert "Read files" in result["reasoning_plan"]
+    await client.close()

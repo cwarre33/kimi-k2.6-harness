@@ -1,5 +1,8 @@
 """Tests for the Harness orchestrator."""
 
+import json
+
+import httpx
 import pytest
 from core.harness import Harness
 from core.tvc_state import VerificationOutcome
@@ -55,5 +58,39 @@ async def test_harness_uses_pre_stored_skills(tmp_path):
         )
         assert result["verification_outcome"] == VerificationOutcome.SUCCESS
         assert skill_id in result["injected_skills"]
+    finally:
+        await harness.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_harness_runs_task_with_model(tmp_path):
+    async def handler(request):
+        body = json.loads(await request.aread())
+        return httpx.Response(200, json={"response": "echo hello", "done": True})
+
+    transport = httpx.MockTransport(handler)
+    from core.ollama_client import OllamaClient
+
+    client = OllamaClient()
+    client._client = httpx.AsyncClient(
+        base_url="http://localhost:11434",
+        headers=client._client.headers,
+        transport=transport,
+    )
+
+    harness = Harness(
+        skill_db_path=str(tmp_path / "skills.db"),
+        checkpoint_db_path=str(tmp_path / "checkpoints.sqlite"),
+        ollama_client=client,
+    )
+    await harness.initialize()
+    try:
+        result = await harness.run_task(
+            task_id="task-001",
+            task_description="Say hello",
+            repo_path=str(tmp_path),
+        )
+        assert result["verification_outcome"] in ("success", "failure")
+        assert len(result["tool_history"]) > 0
     finally:
         await harness.shutdown()
