@@ -1,1 +1,17 @@
 .worktrees/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Runtime / generated
+memory/
+*.sqlite
+.pytest_cache/
+
+# Temp files from report runs
+.benchmark_exit_code
+.run_outdir.txt
+.run_ts.txt

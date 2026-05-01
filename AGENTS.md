@@ -8,7 +8,7 @@ Kimi-K2.6 Autonomous Harness — an AI agent orchestration system implementing a
 
 ### Running tests
 
-All 52 tests use mocks/stubs and require no external services:
+All tests use mocks/stubs and require no external services:
 
 ```bash
 pytest tests/core/ tests/benchmarks/ -v
@@ -27,6 +27,14 @@ No linter is configured in the repo. `ruff check .` works well; existing code ha
 ### Key gotcha: langgraph-checkpoint-sqlite
 
 The `langgraph` pip package does **not** include the SQLite checkpoint module. You must also install `langgraph-checkpoint-sqlite` for `from langgraph.checkpoint.sqlite import SqliteSaver` to resolve.
+
+### SWE-bench Lite report runner
+
+`benchmarks/run_swe_lite_report.py` runs the SWE-bench Lite dev suite and produces SOTA comparison reports. Without the HuggingFace `datasets` package, it falls back to a placeholder instance that always fails the gate (exit code 1) — this is correct behavior. Run with:
+
+```bash
+python3 -m benchmarks.run_swe_lite_report --output-dir benchmarks/results/runs/<timestamp>
+```
 
 ### No dependency manifest
 
