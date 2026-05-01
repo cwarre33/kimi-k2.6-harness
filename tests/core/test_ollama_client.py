@@ -13,6 +13,13 @@ def test_defaults_are_sensible():
     assert model_config.OLLAMA_TIMEOUT_SECONDS == 300.0
 
 
+def test_base_url_strips_trailing_api_segment():
+    client = OllamaClient(base_url="https://ollama.com/api")
+
+    assert client.base_url == "https://ollama.com"
+    assert str(client._client.base_url) == "https://ollama.com"
+
+
 @pytest.mark.asyncio
 async def test_generate_returns_model_response(monkeypatch):
     monkeypatch.setattr(
