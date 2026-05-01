@@ -1,0 +1,7 @@
+{
+  "benchmark": "swe_bench_verified",
+  "suite": "swe_bench_lite_dev",
+  "instance_id": "swe-bench-lite-dev-unavailable",
+  "resolved": false,
+  "test_output": "SWE-bench Lite dev dataset is not installed in this environment."
+}
