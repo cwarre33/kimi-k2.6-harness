@@ -76,3 +76,30 @@ async def test_generate_raises_on_http_error(monkeypatch):
 
     with pytest.raises(httpx.HTTPStatusError):
         await client.generate("test")
+
+
+@pytest.mark.asyncio
+async def test_generate_connect_error_includes_configuration_context():
+    def handler(request: httpx.Request):
+        raise httpx.ConnectError("All connection attempts failed")
+
+    transport = httpx.MockTransport(handler)
+    client = OllamaClient(
+        base_url="http://localhost:11434",
+        model="kimi-k2.6",
+        api_key="secret-token",
+    )
+    client._client = httpx.AsyncClient(
+        base_url="http://localhost:11434",
+        headers={"Authorization": "Bearer secret-token"},
+        transport=transport,
+    )
+
+    with pytest.raises(ConnectionError) as exc_info:
+        await client.generate("test")
+
+    message = str(exc_info.value)
+    assert "http://localhost:11434" in message
+    assert "kimi-k2.6" in message
+    assert "api_key_set=True" in message
+    assert "OLLAMA_BASE_URL" in message
