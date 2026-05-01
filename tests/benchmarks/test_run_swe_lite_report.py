@@ -71,3 +71,21 @@ async def test_report_runner_exits_nonzero_when_below_target(tmp_path):
     assert result.exit_code == 1
     assert report["overall_passed"] is False
     assert report["comparison"]["passed_target"] is False
+
+
+@pytest.mark.asyncio
+async def test_report_runner_fails_gate_when_dataset_is_unavailable(tmp_path):
+    result = await run_swe_lite_report.run_report(
+        output_dir=tmp_path,
+        workers=1,
+        report_name="eval_report.json",
+        instances=run_swe_lite_report._default_instances(),
+        harness=FakeHarness({"swe-bench-lite-dev-unavailable": True}),
+    )
+
+    summary = json.loads(result.summary_path.read_text())
+
+    assert result.exit_code == 1
+    assert summary["resolved"] == 0
+    assert summary["results"][0]["resolved"] is False
+    assert "dataset is not installed" in summary["results"][0]["test_output"]

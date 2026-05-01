@@ -42,6 +42,9 @@ def _default_instances() -> List[Dict[str, Any]]:
                 "SWE-bench Lite dev dataset is not installed in this environment."
             ),
             "patch": "",
+            "force_unresolved_reason": (
+                "SWE-bench Lite dev dataset is not installed in this environment."
+            ),
         }
     ]
 
@@ -69,10 +72,18 @@ async def _evaluate_instances(
     async def evaluate(instance: Dict[str, Any]) -> Dict[str, Any]:
         async with semaphore:
             instance_id = instance["instance_id"]
-            result = await adapter.evaluate_instance(
-                instance_id,
-                instance.get("patch", ""),
-            )
+            forced_reason = instance.get("force_unresolved_reason")
+            if forced_reason:
+                result = {
+                    "instance_id": instance_id,
+                    "resolved": False,
+                    "test_output": forced_reason,
+                }
+            else:
+                result = await adapter.evaluate_instance(
+                    instance_id,
+                    instance.get("patch", ""),
+                )
             record = {
                 "benchmark": BENCHMARK_NAME,
                 "suite": SUITE_NAME,
