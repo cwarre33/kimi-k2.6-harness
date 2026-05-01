@@ -157,7 +157,7 @@ async def test_vacuum_removes_old_deprecated_skills(skill_store):
     await skill_store.validate_skill(old_skill_id, "failure", session_id="s2")
     await skill_store.validate_skill(old_skill_id, "failure", session_id="s3")
 
-    cursor = await skill_store._db.execute(
+    await skill_store._db.execute(
         "UPDATE skills SET created_at = datetime('now', '-31 days') WHERE skill_id = ?",
         (old_skill_id,),
     )

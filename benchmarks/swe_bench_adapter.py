@@ -7,6 +7,19 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
+def _model_error_output(state: Dict[str, Any]) -> Optional[str]:
+    """Return model-error text when the harness only reported a model failure."""
+    details = state.get("verification_details")
+    haystack = [str(details or "")]
+    haystack.extend(
+        str(entry.get("output", "")) for entry in state.get("tool_history", [])
+    )
+    for text in haystack:
+        if "Model error:" in text:
+            return text
+    return None
+
+
 class SWEBenchAdapter:
     """Maps TVC loop output to SWE-bench evaluation protocol."""
 
@@ -17,7 +30,10 @@ class SWEBenchAdapter:
         self.results: List[Dict[str, Any]] = []
 
     async def evaluate_instance(
-        self, instance_id: str, patch: str
+        self,
+        instance_id: str,
+        patch: str,
+        problem_statement: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Evaluate a single SWE-bench instance."""
         logger.info(f"Evaluating SWE-bench instance {instance_id}")
@@ -38,15 +54,16 @@ class SWEBenchAdapter:
 
         state = await self.harness.run_task(
             task_id=instance_id,
-            task_description=f"Fix the issue described in {instance_id}",
+            task_description=problem_statement or f"Fix the issue described in {instance_id}",
             repo_path=str(self.repo_path),
         )
 
-        resolved = state.get("verification_outcome") == "success"
+        model_error = _model_error_output(state)
+        resolved = state.get("verification_outcome") == "success" and not model_error
         return {
             "instance_id": instance_id,
             "resolved": resolved,
-            "test_output": state.get("verification_details", ""),
+            "test_output": model_error or state.get("verification_details", ""),
         }
 
     async def evaluate_dataset(

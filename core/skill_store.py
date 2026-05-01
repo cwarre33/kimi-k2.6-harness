@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import aiosqlite
 
-from core.compression import compress, decompress
+from core.compression import compress
 from core.memory_config import (
     DEPRECATED_VACUUM_MAX_AGE_DAYS,
     DEFAULT_TOP_K_RETRIEVAL,
