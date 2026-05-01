@@ -30,7 +30,10 @@ class SWEBenchAdapter:
         self.results: List[Dict[str, Any]] = []
 
     async def evaluate_instance(
-        self, instance_id: str, patch: str
+        self,
+        instance_id: str,
+        patch: str,
+        problem_statement: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Evaluate a single SWE-bench instance."""
         logger.info(f"Evaluating SWE-bench instance {instance_id}")
@@ -51,7 +54,7 @@ class SWEBenchAdapter:
 
         state = await self.harness.run_task(
             task_id=instance_id,
-            task_description=f"Fix the issue described in {instance_id}",
+            task_description=problem_statement or f"Fix the issue described in {instance_id}",
             repo_path=str(self.repo_path),
         )
 

@@ -1,8 +1,5 @@
 """Tests for the async Ollama client."""
 
-import os
-from unittest.mock import patch
-
 import httpx
 import pytest
 

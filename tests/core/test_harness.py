@@ -1,7 +1,5 @@
 """Tests for the Harness orchestrator."""
 
-import json
-
 import httpx
 import pytest
 from core.harness import Harness
@@ -65,7 +63,7 @@ async def test_harness_uses_pre_stored_skills(tmp_path):
 @pytest.mark.asyncio
 async def test_harness_runs_task_with_model(tmp_path):
     async def handler(request):
-        body = json.loads(await request.aread())
+        await request.aread()
         return httpx.Response(200, json={"response": "echo hello", "done": True})
 
     transport = httpx.MockTransport(handler)

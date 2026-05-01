@@ -1,8 +1,7 @@
 """Top-level orchestrator for the Kimi-K2.6 autonomous harness."""
 
-import os
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from core.skill_store import SqliteSkillStore
 from core.ipc_bus import IPCBus, IPCRole

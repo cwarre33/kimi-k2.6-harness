@@ -7,7 +7,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from benchmarks.eval_orchestrator import EvalOrchestrator
 from benchmarks.swe_bench_adapter import SWEBenchAdapter
@@ -33,31 +33,68 @@ def _safe_instance_filename(instance_id: str) -> str:
     return f"{safe or 'instance'}.json"
 
 
-def _default_instances() -> List[Dict[str, Any]]:
+def _default_instances(reason: str = "SWE-bench Lite dev dataset is not installed in this environment.") -> List[Dict[str, Any]]:
     """Return a minimal full-suite placeholder when no dataset package is present."""
     return [
         {
             "instance_id": "swe-bench-lite-dev-unavailable",
-            "problem_statement": (
-                "SWE-bench Lite dev dataset is not installed in this environment."
-            ),
+            "problem_statement": reason,
             "patch": "",
-            "force_unresolved_reason": (
-                "SWE-bench Lite dev dataset is not installed in this environment."
-            ),
+            "force_unresolved_reason": reason,
         }
     ]
 
 
-def load_swe_bench_lite_dev_instances() -> List[Dict[str, Any]]:
-    """Load SWE-bench Lite dev instances if the datasets package is available."""
+def _decode_test_list(value: Any) -> List[str]:
+    """Decode SWE-bench test lists stored as JSON strings in the dataset."""
+    if value in (None, ""):
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
     try:
-        from datasets import load_dataset  # type: ignore
-    except ModuleNotFoundError:
-        return _default_instances()
+        decoded = json.loads(str(value))
+    except json.JSONDecodeError:
+        return [str(value)]
+    if isinstance(decoded, list):
+        return [str(item) for item in decoded]
+    return [str(decoded)]
 
-    dataset = load_dataset("princeton-nlp/SWE-bench_Lite", split="dev")
-    return [dict(instance) for instance in dataset]
+
+def _normalize_swe_bench_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize a Hugging Face SWE-bench Lite row for the report runner."""
+    return {
+        "repo": row.get("repo", ""),
+        "instance_id": row["instance_id"],
+        "base_commit": row.get("base_commit", ""),
+        "patch": row.get("patch", ""),
+        "test_patch": row.get("test_patch", ""),
+        "problem_statement": row.get("problem_statement", ""),
+        "hints_text": row.get("hints_text", ""),
+        "created_at": row.get("created_at", ""),
+        "version": row.get("version", ""),
+        "fail_to_pass": _decode_test_list(row.get("FAIL_TO_PASS")),
+        "pass_to_pass": _decode_test_list(row.get("PASS_TO_PASS")),
+        "environment_setup_commit": row.get("environment_setup_commit", ""),
+    }
+
+
+def load_swe_bench_lite_dev_instances(
+    load_dataset_fn: Optional[Callable[..., Iterable[Dict[str, Any]]]] = None,
+) -> List[Dict[str, Any]]:
+    """Load SWE-bench Lite dev instances if the datasets package is available."""
+    if load_dataset_fn is None:
+        try:
+            from datasets import load_dataset as load_dataset_fn  # type: ignore
+        except ModuleNotFoundError:
+            return _default_instances()
+
+    try:
+        dataset = load_dataset_fn("princeton-nlp/SWE-bench_Lite", split="dev")
+    except Exception as exc:
+        return _default_instances(
+            f"SWE-bench Lite dev dataset could not be loaded: {exc}"
+        )
+    return [_normalize_swe_bench_row(dict(instance)) for instance in dataset]
 
 
 async def _evaluate_instances(
@@ -83,6 +120,7 @@ async def _evaluate_instances(
                 result = await adapter.evaluate_instance(
                     instance_id,
                     instance.get("patch", ""),
+                    problem_statement=instance.get("problem_statement"),
                 )
             record = {
                 "benchmark": BENCHMARK_NAME,
