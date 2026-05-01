@@ -74,6 +74,33 @@ async def test_adapter_evaluates_instance_with_harness(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_adapter_marks_model_error_output_unresolved(tmp_path):
+    class FakeHarness:
+        async def run_task(self, task_id, task_description, repo_path):
+            return {
+                "verification_outcome": "success",
+                "verification_details": None,
+                "tool_history": [
+                    {
+                        "tool": "shell.exec",
+                        "status": "success",
+                        "exit_code": 0,
+                        "output": "Model error: connection refused",
+                    }
+                ],
+            }
+
+    adapter = SWEBenchAdapter(repo_path=str(tmp_path), harness=FakeHarness())
+    result = await adapter.evaluate_instance(
+        instance_id="test-instance-002",
+        patch="",
+    )
+
+    assert result["resolved"] is False
+    assert "Model error: connection refused" in result["test_output"]
+
+
+@pytest.mark.asyncio
 async def test_terminal_bench_mock_score_computed():
     adapter = TerminalBenchAdapter(repo_path=".", mock_mode=True)
     instances = [
