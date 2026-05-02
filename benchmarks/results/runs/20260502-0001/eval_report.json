@@ -1,0 +1,15 @@
+{
+  "benchmark": "swe_bench_verified",
+  "suite": "swe_bench_lite_dev",
+  "summary_path": "benchmarks/results/runs/20260502-0001/full_suite_summary.json",
+  "comparison": {
+    "benchmark": "swe_bench_verified",
+    "our_score": 0.0,
+    "target_score": 0.6,
+    "top_open_source": 0.56,
+    "passed_target": false,
+    "gap_to_sota": 0.56,
+    "recommendation": "BLOCKED \u2014 score below target"
+  },
+  "overall_passed": false
+}
