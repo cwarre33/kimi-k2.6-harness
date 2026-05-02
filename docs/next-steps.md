@@ -1,14 +1,14 @@
 # Next Steps — Kimi-K2.6 Agentic Harness
 
 **Current Branch:** `feature/kimi-harness`  
-**Last Updated:** 2026-04-25
+**Last Updated:** 2026-05-02
 
 ---
 
 ## Completed
 
 ### 1. Benchmark Gate System
-- `benchmarks/swe_bench_adapter.py` — SWE-bench adapter with mock mode
+- `benchmarks/swe_bench_adapter.py` — SWE-bench adapter with real repo cloning, test patch application, FAIL_TO_PASS/PASS_TO_PASS evaluation
 - `benchmarks/terminal_bench_adapter.py` — Terminal-Bench 2.0 adapter
 - `benchmarks/browsecomp_adapter.py` — BrowseComp adapter
 - `benchmarks/gaia_adapter.py` — GAIA adapter
@@ -18,50 +18,57 @@
 
 ### 2. Production Wiring — Ollama Integration
 - `core/model_config.py` — Env-configurable Ollama settings (URL, model, API key, timeout)
-- `core/ollama_client.py` — Async httpx client for `/api/generate` with optional Bearer auth
+- `core/ollama_client.py` — Async httpx client for `/api/generate` with optional Bearer auth, timeout/retry logic, ConnectError handling
 - `core/tvc_nodes.py` — Model-driven plan, execute, and correct nodes
-  - Plan: LLM generates step-by-step reasoning
-  - Execute: LLM suggests shell command, node runs it via subprocess
-  - Correct: LLM analyzes failures and suggests fixes
-- `core/tvc_graph.py` — Forwards `model_client` to all relevant nodes
-- `core/harness.py` — Owns OllamaClient lifecycle
+  - Plan: LLM generates step-by-step reasoning with skill retrieval
+  - Execute: Inner tool-use loop (max 20 steps) with action parser + tool registry
+  - Correct: LLM analyzes failures, injects relevant skills, resets to pending
+- `core/tvc_graph.py` — Forwards `model_client` and `tool_registry` to all relevant nodes
+- `core/harness.py` — Owns OllamaClient lifecycle, builds sandbox-aware tool registry
 - `tests/core/test_ollama_client.py` — 4 tests (defaults, generate, auth, errors)
 - `tests/core/test_tvc_graph.py` — Added `test_async_plan_node_calls_ollama`
 - `tests/core/test_harness.py` — Added `test_harness_runs_task_with_model` (end-to-end smoke)
 
-### 3. Research — Existing Harnesses
-- `docs/research/harness_comparison.md` — Comparison of SWE-agent, AutoCodeRover, and Devin-style agents
-  - Loop structure, tool set, memory representation, failure recovery
-  - Design implications and prioritized recommendations for our harness
-
-### 4. Action Parser + ACI-Style Tools (This Session)
+### 3. Action Parser + ACI-Style Tools
 - `core/action_parser.py` — Structured DISCUSSION + COMMAND parser with retry fallback
   - Supports markdown code fences and plain command fallback
   - `parse_once()` raises `ParseError`, `parse()` returns `__retry__` action
 - `core/tools/` — ACI-style tool registry:
   - `shell_tool.py` — `shell.exec` with timeout, output truncation, safety checks
-  - `file_tools.py` — `open` (windowed viewer), `search_file` (50-match limit), `search_dir` (50-match limit), `edit` (with Python syntax guardrail)
+  - `file_tools.py` — `open` (windowed viewer), `view_file` (head/tail for large files), `search_file` (50-match limit), `search_dir` (50-match limit), `replace_string` (exact match + difflib hints + Python syntax guardrail), `edit` (line-range replacement + syntax guardrail)
   - `submit_tool.py` — `submit` to end episode
 - `core/tools/__init__.py` — `ToolRegistry`, `ToolResult`, `create_default_registry()`
-- `core/tvc_nodes.py` — `make_async_execute_node` now uses action parser + tool registry instead of raw `subprocess.run(..., shell=True, ...)`
-- `core/tvc_graph.py` — Forwards `tool_registry` to execute node
-- `core/harness.py` — Owns `ToolRegistry` lifecycle, passes to graph builder
 - `tests/core/test_action_parser.py` — 13 tests
 - `tests/core/test_tools.py` — 21 tests
-- `tests/benchmarks/test_real_adapter.py` — 3 tests for real dataset loading
 
-### 5. Real Benchmark Dataset Integration (This Session)
+### 4. Real Benchmark Dataset Integration
 - Downloaded SWE-bench Lite dev set (23 instances) from HuggingFace
 - `benchmarks/data/swe-bench-lite-dev.json` — Real instances in JSON format
 - `benchmarks/swe_bench_adapter.py` — Updated to:
   - Load instances from JSON via `_load_instances()`
   - Clone repos and checkout base commits via `_setup_repo()`
   - Run harness against real codebases
+  - Extract model-generated patches via `_get_patch_diff()`
+  - Run FAIL_TO_PASS + PASS_TO_PASS test validation
 - `run_real_benchmark.py` — End-to-end runner script
-  - `--instance` — Run single instance (default: `sqlfluff__sqlfluff-1625`)
-  - `--mock` — Use mock model client for demonstration
-  - `--full-suite` — Run full dev set
-- `benchmarks/eval_orchestrator.py` — `dataset_paths` parameter for real data
+  - `--instance` — Run single instance
+  - `--full-suite` — Run full dev set with concurrent workers
+  - `--model` / `--cloud` — Ollama local or cloud
+  - `--workers` — Concurrent instances (default: 4)
+- `calibrate_benchmark.py` — Calibration harness for ground-truth patch validation
+- `benchmarks/run_swe_lite_report.py` — Automation-friendly report generator
+
+### 5. First Real Benchmark Run (2026-05-01/02)
+- **Model:** kimi-k2.6:cloud via Ollama Cloud API
+- **Suite:** SWE-bench Lite dev (23 instances)
+- **Workers:** 4 concurrent
+- **Score:** 16/23 resolved = **69.6%**
+- **Target:** 60% — **PASSED**
+
+| Status | Instances |
+|---|---|
+| PASS | marshmallow-{1343,1359}, pvlib-{1072,1154}, pydicom-{1256,1413,1694}, astroid-{1268,1333,1866,1978}, pyvista-4315, sqlfluff-{1517,1625,1733,1763} |
+| FAIL | pvlib-{1606,1707,1854}, pydicom-{1139,901}, astroid-1196, sqlfluff-2419 |
 
 **Current test status:** 87 passed, 2 skipped.
 
@@ -69,81 +76,63 @@
 
 ## Remaining Work
 
-### Phase 2: Production Hardening (Next Priority)
-**Goal:** Make the harness robust enough for real benchmark runs.
+### Phase 1: Legitimate Published Benchmark Score (Next Priority)
+**Goal:** Get a score that can be submitted to the SWE-bench leaderboard.
+
+**Why the current 69.6% is NOT publishable yet:**
+1. **Wrong split** — We ran the 23-instance dev split, not the 300-instance test split used for leaderboard scores
+2. **No Docker isolation** — Tests ran on macOS with local Python 3.12. Official eval uses Docker with exact Python versions/dependencies
+3. **Test patch visible** — Test patch is applied before the model starts, potentially leaking expected behavior
+4. **Small sample** — 23 instances is too small for statistical significance
+
+**Tasks:**
+1. **Integrate SWE-bench official evaluation harness**
+   - Use `swe-bench` Python package for Docker-based evaluation
+   - Run on the **SWE-bench Lite test split** (300 instances)
+   - Generate predictions file in the required format (`instance_id`, `model_patch`, `model_name_or_path`)
+   - Deliverable: `benchmarks/swe_bench_official_eval.py` or integration script
+
+2. **Docker containerization**
+   - Either use the official SWE-bench Docker harness or build our own
+   - Ensure exact Python/dependency versions per repo
+   - Run `swe-bench.harness.run_evaluation` or equivalent
+   - Deliverable: Docker-based evaluation pipeline
+
+3. **Submit to leaderboard**
+   - Generate predictions file for test split
+   - Run official evaluation (or submit to SWE-bench website)
+   - Document score comparison
+
+### Phase 2: Production Hardening
+**Goal:** Make the harness robust for unattended runs at scale.
 
 **P0 — Critical:**
-1. **Sandboxed Execution**
-   - Containerize execute node (Docker or Firecracker)
-   - Mount workspace read/write, isolate from host
-   - Add resource limits (CPU, memory, disk, network)
-   - Deliverable: `core/sandbox.py` + tests
+1. **Fix timeout loop bug**
+   - `pydicom-901` and `astroid-1196` got stuck in 20-hour timeout loops
+   - Add a global episode timeout (e.g. 30 min max per instance)
+   - Add early termination when model repeatedly produces same parse errors or shell quoting failures
+
+2. **Shell quoting**
+   - Model frequently generates unescaped quotes in `shell.exec` commands
+   - Either escape in the tool or improve system prompt instructions
+   - Current workaround: shell.exec errors are excluded from verification
 
 **P1 — Important:**
-2. **Ollama Integration Improvements**
+3. **Streaming generation**
    - Add streaming support for long-running generation
-   - Add retry logic with exponential backoff for transient failures
-   - Add request/response logging for debugging
-   - Test against actual Ollama endpoint running kimi-k2.6
+   - Current 300s timeout is hit frequently
 
-3. **Error Handling**
-   - Add structured error types instead of generic `Exception`
-   - Handle model refusal / empty responses
-   - Handle subprocess timeouts
-   - Handle graph checkpoint corruption
+4. **Larger context window**
+   - kimi-k2.6 has a large context window; we're truncating file views at 10KB
+   - Consider using the full window for large files
 
-**P2 — Nice to Have:**
-4. **Execute Node Hardening**
-   - Add timeout configuration (currently hardcoded 60s)
-   - Add working directory validation
-   - Sanitize shell commands (prevent injection)
-   - Handle long-running commands gracefully
-
----
-
-### Phase 3: Real Benchmark Integration (In Progress)
-**Goal:** Move from mock evaluation to actual benchmark datasets.
-
-**Completed:**
-1. **SWE-bench** — Dataset downloaded, adapter loads real instances, runner works
-
-**Remaining:**
-2. **SWE-bench** — Patch application and test execution in cloned repos
-3. **Terminal-Bench 2.0** — Find/download dataset
-4. **BrowseComp** — Integrate web browsing tool (playwright / selenium)
-5. **GAIA** — Integrate with GAIA dataset
-
----
-
-### Phase 4: Skill Learning & Memory
-**Goal:** Make the harness self-improving by learning from successes and failures.
+### Phase 3: Other Benchmarks
+**Goal:** Expand beyond SWE-bench.
 
 **Tasks:**
-1. **Skill extraction from traces**
-   - After a successful task, automatically extract reusable skill
-   - Compress thought traces using existing zstd compression
-   - Tag skills with task patterns and outcomes
-
-2. **Skill retrieval improvements**
-   - Add semantic search using embeddings (currently keyword-only)
-   - Implement skill ranking by validation success rate
-   - Add skill versioning
-
-3. **Hierarchical memory**
-   - Implement L1-L4 memory tiers as documented in architecture
-   - Add insight extraction from task history
-   - Archive old sessions to cold storage
-
----
-
-### Phase 5: Subagent-Driven Execution
-**Goal:** Use subagent pattern for complex multi-step tasks.
-
-**Tasks:**
-1. Implement subagent dispatch within execute node
-2. Add subagent result aggregation
-3. Add parent-child session tracking
-4. Update IPC protocol for subagent messages
+1. **Terminal-Bench 2.0** — Find/download dataset, adapt harness
+2. **BrowseComp** — Integrate web browsing tool (playwright / selenium)
+3. **GAIA** — Integrate with GAIA dataset
 
 ---
 
@@ -156,11 +145,11 @@ pytest tests/core/ tests/benchmarks/ -q
 
 ### Running Real Benchmark
 ```bash
-# Single instance with mock model (demonstration)
-python run_real_benchmark.py --mock --instance sqlfluff__sqlfluff-1625
+# Single instance
+python run_real_benchmark.py --instance sqlfluff__sqlfluff-1625 --cloud --model kimi-k2.6:cloud
 
-# Full suite with real Ollama model
-python run_real_benchmark.py --full-suite
+# Full suite with Ollama Cloud
+python run_real_benchmark.py --full-suite --cloud --model kimi-k2.6:cloud --workers 4
 ```
 
 ### Running Specific Test
@@ -177,27 +166,21 @@ git checkout feature/kimi-harness
 
 ### Environment Variables
 ```bash
-export OLLAMA_BASE_URL="http://localhost:11434"
-export OLLAMA_MODEL="kimi-k2.6"
-export OLLAMA_API_KEY=""  # set if using reverse proxy
+export OLLAMA_BASE_URL="https://ollama.com"
+export OLLAMA_MODEL="kimi-k2.6:cloud"
+export OLLAMA_API_KEY="your-key-here"
 export OLLAMA_TIMEOUT_SECONDS="300"
 ```
 
 ---
 
-## Architecture Notes for Next Session
+## Architecture Notes
 
 - **TVC StateGraph:** plan → execute → verify → [end | correct → plan]
 - **Action Parser:** DISCUSSION + COMMAND format, markdown code fences, retry on malformed
-- **Tool Registry:** `shell.exec`, `open`, `search_file`, `search_dir`, `edit`, `submit`
-- **Checkpointing:** AsyncSqliteSaver persists state between retries (optional — falls back to in-memory)
+- **Tool Registry:** `shell.exec`, `open`, `search_file`, `search_dir`, `replace_string`, `edit`, `submit`
+- **Checkpointing:** AsyncSqliteSaver persists state between retries
 - **IPC:** MessagePack over Unix sockets (local) or TCP (remote)
 - **Skill Store:** SQLite with zstd-compressed traces, tag-based retrieval
-- **Model Client:** httpx.AsyncClient → Ollama `/api/generate`, Bearer auth optional
+- **Model Client:** httpx.AsyncClient → Ollama `/api/generate`, Bearer auth optional, timeout/retry
 - **Benchmark Data:** SWE-bench Lite dev set at `benchmarks/data/swe-bench-lite-dev.json`
-
-## Design Decisions to Revisit
-
-1. **Mock model client** — `run_real_benchmark.py` defaults to `MockModelClient` when `--mock` is passed. Production runs should use `OllamaClient()` with Ollama running kimi-k2.6.
-2. **Tool output truncation** — `ShellExecTool` truncates output at 10KB to prevent context window flooding. This may hide important error messages.
-3. **No Docker sandbox** — Tools still run on the host filesystem. Before running untrusted code, implement `core/sandbox.py` with container isolation.
