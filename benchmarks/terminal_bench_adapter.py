@@ -50,11 +50,20 @@ class TerminalBenchAdapter:
         }
 
     async def evaluate_dataset(
-        self, instances: List[Dict[str, Any]]
+        self, instances: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """Evaluate a dataset of Terminal-Bench instances."""
         resolved_count = 0
-        total = len(instances)
+        total = len(instances) if instances else 0
+
+        if instances is None:
+            return {
+                "benchmark": "terminal_bench_2_0",
+                "total": 0,
+                "resolved": 0,
+                "score": 0.0,
+                "results": [],
+            }
 
         for inst in instances:
             if self.mock_mode:

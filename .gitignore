@@ -1,1 +1,35 @@
 .worktrees/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+
+# Benchmark logs
+*.log
+benchmark_run_*
+full_suite_run_*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (never commit)
+.env
+*.key
+*.pem
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary benchmark repo checkouts (e.g. sqlfluff__sqlfluff-1625/)
+*__*-[0-9]*/

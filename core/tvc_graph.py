@@ -6,8 +6,13 @@ from typing import Optional
 
 import aiosqlite
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+try:
+    from langgraph.checkpoint.sqlite import SqliteSaver
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+except ImportError:
+    SqliteSaver = None  # type: ignore
+    AsyncSqliteSaver = None  # type: ignore
 
 from core.tvc_state import TVCState, VerificationOutcome
 from core.tvc_nodes import (
@@ -24,6 +29,7 @@ from core.tvc_config import CHECKPOINT_DB_PATH
 from core.skill_store import SqliteSkillStore
 from core.ipc_bus import IPCBus
 from core.ollama_client import OllamaClient
+from core.tools import ToolRegistry
 
 
 def should_continue(state: TVCState) -> str:
@@ -55,7 +61,7 @@ def build_tvc_graph(checkpoint_db_path: str = CHECKPOINT_DB_PATH):
     )
     builder.add_edge("correct", "plan")
 
-    if checkpoint_db_path:
+    if checkpoint_db_path and SqliteSaver is not None:
         db_dir = os.path.dirname(checkpoint_db_path)
         if db_dir:
             os.makedirs(db_dir, exist_ok=True)
@@ -71,12 +77,13 @@ async def build_async_tvc_graph(
     skill_store: Optional[SqliteSkillStore] = None,
     ipc_bus: Optional[IPCBus] = None,
     model_client: Optional[OllamaClient] = None,
+    tool_registry: Optional[ToolRegistry] = None,
 ):
     """Build and compile the async TVC StateGraph."""
     builder = StateGraph(TVCState)
 
     builder.add_node("plan", make_async_plan_node(skill_store, model_client))
-    builder.add_node("execute", make_async_execute_node(ipc_bus, model_client))
+    builder.add_node("execute", make_async_execute_node(ipc_bus, model_client, tool_registry))
     builder.add_node("verify", make_async_verify_node(ipc_bus))
     builder.add_node("correct", make_async_correct_node(skill_store, model_client))
 
@@ -90,7 +97,7 @@ async def build_async_tvc_graph(
     )
     builder.add_edge("correct", "plan")
 
-    if checkpoint_db_path:
+    if checkpoint_db_path and AsyncSqliteSaver is not None:
         db_dir = os.path.dirname(checkpoint_db_path)
         if db_dir:
             os.makedirs(db_dir, exist_ok=True)

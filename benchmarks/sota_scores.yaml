@@ -11,6 +11,15 @@ swe_bench_verified:
     score: 0.60
     note: "Minimum viable score before production use"
 
+swe_bench_lite_dev:
+  top_open_source:
+    system: "OpenHands + Claude 3.5 Sonnet (reported on Verified; use as proxy)"
+    score: 0.56
+    date: "2025-03-15"
+  our_target:
+    score: 0.60
+    note: "Proxy target until we adopt SWE-bench Verified officially"
+
 terminal_bench_2_0:
   top_open_source:
     system: "OpenHands runtime"

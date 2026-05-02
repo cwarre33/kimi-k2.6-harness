@@ -56,7 +56,10 @@ class EvalOrchestrator:
         return path
 
     async def run_full_suite(
-        self, harness=None, mock_instances: Optional[Dict[str, List[Dict[str, Any]]]] = None
+        self,
+        harness=None,
+        mock_instances: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+        dataset_paths: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Run all benchmark adapters and produce unified report."""
         from benchmarks.swe_bench_adapter import SWEBenchAdapter
@@ -71,16 +74,17 @@ class EvalOrchestrator:
         }
 
         mock_instances = mock_instances or {}
+        dataset_paths = dataset_paths or {}
 
         # SWE-bench Verified
         swe = SWEBenchAdapter(
             repo_path=".",
             harness=harness if not mock_instances.get("swe_bench_verified") else None,
             mock_mode=bool(mock_instances.get("swe_bench_verified")),
+            dataset_path=dataset_paths.get("swe_bench_verified"),
         )
-        swe_result = await swe.evaluate_dataset(
-            mock_instances.get("swe_bench_verified", [])
-        )
+        swe_instances = mock_instances.get("swe_bench_verified") if "swe_bench_verified" in mock_instances else None
+        swe_result = await swe.evaluate_dataset(swe_instances)
         report["benchmarks"]["swe_bench_verified"] = self.compare_to_sota(
             "swe_bench_verified", swe_result["score"]
         )
@@ -91,9 +95,8 @@ class EvalOrchestrator:
             harness=harness if not mock_instances.get("terminal_bench_2_0") else None,
             mock_mode=bool(mock_instances.get("terminal_bench_2_0")),
         )
-        terminal_result = await terminal.evaluate_dataset(
-            mock_instances.get("terminal_bench_2_0", [])
-        )
+        terminal_instances = mock_instances.get("terminal_bench_2_0") if "terminal_bench_2_0" in mock_instances else None
+        terminal_result = await terminal.evaluate_dataset(terminal_instances)
         report["benchmarks"]["terminal_bench_2_0"] = self.compare_to_sota(
             "terminal_bench_2_0", terminal_result["score"]
         )
@@ -104,9 +107,8 @@ class EvalOrchestrator:
             harness=harness if not mock_instances.get("browsecomp") else None,
             mock_mode=bool(mock_instances.get("browsecomp")),
         )
-        browse_result = await browse.evaluate_dataset(
-            mock_instances.get("browsecomp", [])
-        )
+        browse_instances = mock_instances.get("browsecomp") if "browsecomp" in mock_instances else None
+        browse_result = await browse.evaluate_dataset(browse_instances)
         report["benchmarks"]["browsecomp"] = self.compare_to_sota(
             "browsecomp", browse_result["score"]
         )
@@ -117,9 +119,8 @@ class EvalOrchestrator:
             harness=harness if not mock_instances.get("gaia") else None,
             mock_mode=bool(mock_instances.get("gaia")),
         )
-        gaia_result = await gaia.evaluate_dataset(
-            mock_instances.get("gaia", [])
-        )
+        gaia_instances = mock_instances.get("gaia") if "gaia" in mock_instances else None
+        gaia_result = await gaia.evaluate_dataset(gaia_instances)
         report["benchmarks"]["gaia"] = self.compare_to_sota(
             "gaia", gaia_result["score"]
         )

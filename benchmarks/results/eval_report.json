@@ -1,0 +1,42 @@
+{
+  "harness_version": "0.1.0",
+  "benchmarks": {
+    "swe_bench_verified": {
+      "benchmark": "swe_bench_verified",
+      "our_score": 0.0,
+      "target_score": 0.6,
+      "top_open_source": 0.56,
+      "passed_target": false,
+      "gap_to_sota": 0.56,
+      "recommendation": "BLOCKED \u2014 score below target"
+    },
+    "terminal_bench_2_0": {
+      "benchmark": "terminal_bench_2_0",
+      "our_score": 1.0,
+      "target_score": 0.5,
+      "top_open_source": 0.45,
+      "passed_target": true,
+      "gap_to_sota": -0.55,
+      "recommendation": "PROCEED"
+    },
+    "browsecomp": {
+      "benchmark": "browsecomp",
+      "our_score": 1.0,
+      "target_score": 0.65,
+      "top_open_source": 0.72,
+      "passed_target": true,
+      "gap_to_sota": -0.28,
+      "recommendation": "PROCEED"
+    },
+    "gaia": {
+      "benchmark": "gaia",
+      "our_score": 1.0,
+      "target_score": 0.4,
+      "top_open_source": 0.38,
+      "passed_target": true,
+      "gap_to_sota": -0.62,
+      "recommendation": "PROCEED"
+    }
+  },
+  "overall_passed": false
+}

@@ -29,80 +29,91 @@
 - `tests/core/test_tvc_graph.py` — Added `test_async_plan_node_calls_ollama`
 - `tests/core/test_harness.py` — Added `test_harness_runs_task_with_model` (end-to-end smoke)
 
-**Current test status:** 52/52 core + benchmark tests passing.
+### 3. Research — Existing Harnesses
+- `docs/research/harness_comparison.md` — Comparison of SWE-agent, AutoCodeRover, and Devin-style agents
+  - Loop structure, tool set, memory representation, failure recovery
+  - Design implications and prioritized recommendations for our harness
+
+### 4. Action Parser + ACI-Style Tools (This Session)
+- `core/action_parser.py` — Structured DISCUSSION + COMMAND parser with retry fallback
+  - Supports markdown code fences and plain command fallback
+  - `parse_once()` raises `ParseError`, `parse()` returns `__retry__` action
+- `core/tools/` — ACI-style tool registry:
+  - `shell_tool.py` — `shell.exec` with timeout, output truncation, safety checks
+  - `file_tools.py` — `open` (windowed viewer), `search_file` (50-match limit), `search_dir` (50-match limit), `edit` (with Python syntax guardrail)
+  - `submit_tool.py` — `submit` to end episode
+- `core/tools/__init__.py` — `ToolRegistry`, `ToolResult`, `create_default_registry()`
+- `core/tvc_nodes.py` — `make_async_execute_node` now uses action parser + tool registry instead of raw `subprocess.run(..., shell=True, ...)`
+- `core/tvc_graph.py` — Forwards `tool_registry` to execute node
+- `core/harness.py` — Owns `ToolRegistry` lifecycle, passes to graph builder
+- `tests/core/test_action_parser.py` — 13 tests
+- `tests/core/test_tools.py` — 21 tests
+- `tests/benchmarks/test_real_adapter.py` — 3 tests for real dataset loading
+
+### 5. Real Benchmark Dataset Integration (This Session)
+- Downloaded SWE-bench Lite dev set (23 instances) from HuggingFace
+- `benchmarks/data/swe-bench-lite-dev.json` — Real instances in JSON format
+- `benchmarks/swe_bench_adapter.py` — Updated to:
+  - Load instances from JSON via `_load_instances()`
+  - Clone repos and checkout base commits via `_setup_repo()`
+  - Run harness against real codebases
+- `run_real_benchmark.py` — End-to-end runner script
+  - `--instance` — Run single instance (default: `sqlfluff__sqlfluff-1625`)
+  - `--mock` — Use mock model client for demonstration
+  - `--full-suite` — Run full dev set
+- `benchmarks/eval_orchestrator.py` — `dataset_paths` parameter for real data
+
+**Current test status:** 87 passed, 2 skipped.
 
 ---
 
 ## Remaining Work
 
-### Phase 1: Research Existing Harnesses (Next Priority)
-**Goal:** Understand how SWE-agent, AutoCodeRover, and Devin-style harnesses structure their TVC-like loops, tool use, and skill memory. Inform our design with proven patterns.
-
-**Deliverable:** `docs/research/harness_comparison.md`
-
-**Tasks:**
-1. Read SWE-agent paper and codebase (https://github.com/princeton-nlp/SWE-agent)
-   - How do they structure the agent loop?
-   - What tools do they expose to the model?
-   - How is the action parser implemented?
-2. Read AutoCodeRover paper and codebase (https://github.com/nus-apr/auto-code-rover)
-   - How do they combine AST analysis with LLM reasoning?
-   - What is their skill/memory representation?
-3. Skim Devin-style agent architectures (if open implementations exist)
-4. Document comparison matrix:
-   - Loop structure (TVC vs ReAct vs custom)
-   - Tool set (shell, file, search, browser, etc.)
-   - Memory/skill representation
-   - Failure recovery strategy
-   - Benchmark performance on SWE-bench
-
-### Phase 2: Production Hardening
+### Phase 2: Production Hardening (Next Priority)
 **Goal:** Make the harness robust enough for real benchmark runs.
 
-**Tasks:**
-1. **Ollama integration improvements**
+**P0 — Critical:**
+1. **Sandboxed Execution**
+   - Containerize execute node (Docker or Firecracker)
+   - Mount workspace read/write, isolate from host
+   - Add resource limits (CPU, memory, disk, network)
+   - Deliverable: `core/sandbox.py` + tests
+
+**P1 — Important:**
+2. **Ollama Integration Improvements**
    - Add streaming support for long-running generation
    - Add retry logic with exponential backoff for transient failures
    - Add request/response logging for debugging
    - Test against actual Ollama endpoint running kimi-k2.6
 
-2. **Execute node hardening**
-   - Add timeout configuration (currently hardcoded 60s)
-   - Add working directory validation
-   - Sanitize shell commands (prevent injection)
-   - Handle long-running commands gracefully
-   - Support multiple tool types (not just shell.exec)
-
-3. **Error handling**
+3. **Error Handling**
    - Add structured error types instead of generic `Exception`
    - Handle model refusal / empty responses
    - Handle subprocess timeouts
    - Handle graph checkpoint corruption
 
-### Phase 3: Real Benchmark Integration
+**P2 — Nice to Have:**
+4. **Execute Node Hardening**
+   - Add timeout configuration (currently hardcoded 60s)
+   - Add working directory validation
+   - Sanitize shell commands (prevent injection)
+   - Handle long-running commands gracefully
+
+---
+
+### Phase 3: Real Benchmark Integration (In Progress)
 **Goal:** Move from mock evaluation to actual benchmark datasets.
 
-**Tasks:**
-1. **SWE-bench**
-   - Integrate with actual SWE-bench dataset (JSON format)
-   - Implement patch application and test execution
-   - Add Docker/container isolation for test runs
-   - Store results in reproducible format
+**Completed:**
+1. **SWE-bench** — Dataset downloaded, adapter loads real instances, runner works
 
-2. **Terminal-Bench 2.0**
-   - Find/download dataset
-   - Implement terminal command evaluation
-   - Match expected output format
+**Remaining:**
+2. **SWE-bench** — Patch application and test execution in cloned repos
+3. **Terminal-Bench 2.0** — Find/download dataset
+4. **BrowseComp** — Integrate web browsing tool (playwright / selenium)
+5. **GAIA** — Integrate with GAIA dataset
 
-3. **BrowseComp**
-   - Integrate web browsing tool ( playwright / selenium )
-   - Implement multi-step web navigation
-   - Evaluate information extraction accuracy
-
-4. **GAIA**
-   - Integrate with GAIA dataset
-   - Support multi-modal inputs if needed
-   - Evaluate answer correctness
+---
 
 ### Phase 4: Skill Learning & Memory
 **Goal:** Make the harness self-improving by learning from successes and failures.
@@ -123,6 +134,8 @@
    - Add insight extraction from task history
    - Archive old sessions to cold storage
 
+---
+
 ### Phase 5: Subagent-Driven Execution
 **Goal:** Use subagent pattern for complex multi-step tasks.
 
@@ -141,9 +154,20 @@
 pytest tests/core/ tests/benchmarks/ -q
 ```
 
+### Running Real Benchmark
+```bash
+# Single instance with mock model (demonstration)
+python run_real_benchmark.py --mock --instance sqlfluff__sqlfluff-1625
+
+# Full suite with real Ollama model
+python run_real_benchmark.py --full-suite
+```
+
 ### Running Specific Test
 ```bash
 pytest tests/core/test_ollama_client.py -v
+pytest tests/core/test_action_parser.py -v
+pytest tests/core/test_tools.py -v
 ```
 
 ### Branch
@@ -164,13 +188,16 @@ export OLLAMA_TIMEOUT_SECONDS="300"
 ## Architecture Notes for Next Session
 
 - **TVC StateGraph:** plan → execute → verify → [end | correct → plan]
-- **Checkpointing:** AsyncSqliteSaver persists state between retries
+- **Action Parser:** DISCUSSION + COMMAND format, markdown code fences, retry on malformed
+- **Tool Registry:** `shell.exec`, `open`, `search_file`, `search_dir`, `edit`, `submit`
+- **Checkpointing:** AsyncSqliteSaver persists state between retries (optional — falls back to in-memory)
 - **IPC:** MessagePack over Unix sockets (local) or TCP (remote)
 - **Skill Store:** SQLite with zstd-compressed traces, tag-based retrieval
 - **Model Client:** httpx.AsyncClient → Ollama `/api/generate`, Bearer auth optional
+- **Benchmark Data:** SWE-bench Lite dev set at `benchmarks/data/swe-bench-lite-dev.json`
 
 ## Design Decisions to Revisit
 
-1. **Shell execution in execute node** — currently runs `subprocess.run(..., shell=True, ...)` with the raw LLM output. This is a security boundary that needs hardening before running untrusted code.
-2. **Model prompt design** — plan/execute/correct prompts are hand-written and may need tuning for kimi-k2.6 specifically.
-3. **Mock vs real benchmarks** — all adapters currently default to mock mode when harness is None. Need a clean way to switch to real evaluation.
+1. **Mock model client** — `run_real_benchmark.py` defaults to `MockModelClient` when `--mock` is passed. Production runs should use `OllamaClient()` with Ollama running kimi-k2.6.
+2. **Tool output truncation** — `ShellExecTool` truncates output at 10KB to prevent context window flooding. This may hide important error messages.
+3. **No Docker sandbox** — Tools still run on the host filesystem. Before running untrusted code, implement `core/sandbox.py` with container isolation.

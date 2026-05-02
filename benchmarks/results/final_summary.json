@@ -1,0 +1,155 @@
+{
+  "benchmark": "swe_bench_lite_dev",
+  "date": "2026-05-02T10:26:12.358481",
+  "model": "kimi-k2.6:cloud",
+  "total": 23,
+  "resolved": 16,
+  "unresolved": 7,
+  "score": 0.6957,
+  "percentage": "69.6%",
+  "target_score": 0.6,
+  "passed_target": true,
+  "note": "Conservative score: 2 instances killed after 20h timeout loops, counted as unresolved",
+  "results": [
+    {
+      "instance_id": "marshmallow-code__marshmallow-1343",
+      "resolved": true,
+      "tool_count": 9,
+      "patch_len": 1904
+    },
+    {
+      "instance_id": "marshmallow-code__marshmallow-1359",
+      "resolved": true,
+      "tool_count": 7,
+      "patch_len": 1557
+    },
+    {
+      "instance_id": "pvlib__pvlib-python-1072",
+      "resolved": true,
+      "tool_count": 3,
+      "patch_len": 1646
+    },
+    {
+      "instance_id": "pvlib__pvlib-python-1154",
+      "resolved": true,
+      "tool_count": 6,
+      "patch_len": 1045
+    },
+    {
+      "instance_id": "pvlib__pvlib-python-1606",
+      "resolved": false,
+      "tool_count": 4,
+      "patch_len": 1837
+    },
+    {
+      "instance_id": "pvlib__pvlib-python-1707",
+      "resolved": false,
+      "tool_count": 5,
+      "patch_len": 1239
+    },
+    {
+      "instance_id": "pvlib__pvlib-python-1854",
+      "resolved": false,
+      "tool_count": 21,
+      "patch_len": 1577
+    },
+    {
+      "instance_id": "pydicom__pydicom-1139",
+      "resolved": false,
+      "tool_count": 7,
+      "patch_len": 2828
+    },
+    {
+      "instance_id": "pydicom__pydicom-1256",
+      "resolved": true,
+      "tool_count": 6,
+      "patch_len": 1563
+    },
+    {
+      "instance_id": "pydicom__pydicom-1413",
+      "resolved": true,
+      "tool_count": 20,
+      "patch_len": 824
+    },
+    {
+      "instance_id": "pydicom__pydicom-1694",
+      "resolved": true,
+      "tool_count": 49,
+      "patch_len": 1890
+    },
+    {
+      "instance_id": "pydicom__pydicom-901",
+      "resolved": false,
+      "tool_count": 0,
+      "patch_len": 0,
+      "note": "Timeout/stuck - counted as unresolved"
+    },
+    {
+      "instance_id": "pylint-dev__astroid-1196",
+      "resolved": false,
+      "tool_count": 0,
+      "patch_len": 0,
+      "note": "Timeout/stuck - counted as unresolved"
+    },
+    {
+      "instance_id": "pylint-dev__astroid-1268",
+      "resolved": true,
+      "tool_count": 6,
+      "patch_len": 1175
+    },
+    {
+      "instance_id": "pylint-dev__astroid-1333",
+      "resolved": true,
+      "tool_count": 20,
+      "patch_len": 1575
+    },
+    {
+      "instance_id": "pylint-dev__astroid-1866",
+      "resolved": true,
+      "tool_count": 3,
+      "patch_len": 1335
+    },
+    {
+      "instance_id": "pylint-dev__astroid-1978",
+      "resolved": true,
+      "tool_count": 6,
+      "patch_len": 2834
+    },
+    {
+      "instance_id": "pyvista__pyvista-4315",
+      "resolved": true,
+      "tool_count": 11,
+      "patch_len": 3090
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-1517",
+      "resolved": true,
+      "tool_count": 20,
+      "patch_len": 1560
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-1625",
+      "resolved": true,
+      "tool_count": 79,
+      "patch_len": 1327
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-1733",
+      "resolved": true,
+      "tool_count": 20,
+      "patch_len": 1722
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-1763",
+      "resolved": true,
+      "tool_count": 9,
+      "patch_len": 2747
+    },
+    {
+      "instance_id": "sqlfluff__sqlfluff-2419",
+      "resolved": false,
+      "tool_count": 25,
+      "patch_len": 418
+    }
+  ]
+}

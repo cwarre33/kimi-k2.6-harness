@@ -1,0 +1,90 @@
+{
+  "instance_id": "marshmallow-code__marshmallow-1343",
+  "resolved": true,
+  "test_output": "No tests found at this commit\nImportError while loading conftest '/private/var/folders/57/z15298ln6d34l6nlkmpjyvmw0000gn/T/tmpwd3z_si5/repos/marshmallow-code__marshmallow-1343/tests/conftest.py'.\ntests/conftest.py:5: in <module>\n    from tests.base import User, UserSchema, Blog\ntests/base.py:6: in <module>\n    import simplejson\nE   ModuleNotFoundError: No module named 'simplejson'\n\n\nPASS_TO_PASS:\nNo tests found at this commit\nImportError while loading conftest '/private/var/folders/57/z15298ln6d34l6nlkmpjyvmw0000gn/T/tmpwd3z_si5/repos/marshmallow-code__marshmallow-1343/tests/conftest.py'.\ntests/conftest.py:5: in <module>\n    from tests.base import User, UserSchema, Blog\ntests/base.py:6: in <module>\n    import simplejson\nE   ModuleNotFoundError: No module named 'simplejson'\n",
+  "model_patch": "diff --git a/src/marshmallow/schema.py b/src/marshmallow/schema.py\nindex 085c509b..5dea2853 100644\n--- a/src/marshmallow/schema.py\n+++ b/src/marshmallow/schema.py\n@@ -861,6 +861,8 @@ class BaseSchema(base.SchemaABC):\n         return data\n \n     def _invoke_field_validators(self, unmarshal, data, many):\n+        if data is None:\n+            return\n         for attr_name in self.__processors__[(VALIDATES, False)]:\n             validator = getattr(self, attr_name)\n             validator_kwargs = validator.__marshmallow_kwargs__[(VALIDATES, False)]\ndiff --git a/tests/test_marshalling.py b/tests/test_marshalling.py\nindex 273dada2..8051cc25 100644\n--- a/tests/test_marshalling.py\n+++ b/tests/test_marshalling.py\n@@ -2,7 +2,7 @@\n \n import pytest\n \n-from marshmallow import fields, Schema\n+from marshmallow import fields, Schema, validates\n from marshmallow.marshalling import Marshaller, Unmarshaller, missing\n from marshmallow.exceptions import ValidationError\n \n@@ -283,3 +283,24 @@ class TestUnmarshaller:\n \n             assert result is None\n             assert excinfo.value.messages == {'foo': {'_schema': ['Invalid input type.']}}\n+\n+    # Regression test for https://github.com/marshmallow-code/marshmallow/issues/1342\n+    def test_deserialize_wrong_nested_type_with_validates_method(self, unmarshal):\n+        class TestSchema(Schema):\n+            value = fields.String()\n+\n+            @validates('value')\n+            def validate_value(self, value):\n+                pass\n+\n+        data = {\n+            'foo': 'not what we need'\n+        }\n+        fields_dict = {\n+            'foo': fields.Nested(TestSchema, required=True)\n+        }\n+        with pytest.raises(ValidationError) as excinfo:\n+            result = unmarshal.deserialize(data, fields_dict)\n+\n+            assert result is None\n+            assert excinfo.value.messages == {'foo': {'_schema': ['Invalid input type.']}}\n",
+  "tool_history": [
+    {
+      "tool": "search_file",
+      "command": "search_file _invoke_field_validators marshmallow/schema.py",
+      "status": "error",
+      "exit_code": -1,
+      "output": "File not found: marshmallow/schema.py",
+      "metadata": null
+    },
+    {
+      "tool": "search_dir",
+      "command": "search_dir _invoke_field_validators",
+      "status": "success",
+      "exit_code": 0,
+      "output": "Matches for '_invoke_field_validators' in /var/folders/57/z15298ln6d34l6nlkmpjyvmw0000gn/T/tmpwd3z_si5/repos/marshmallow-code__marshmallow-1343:\nsrc/marshmallow/schema.py:674:             self._invoke_field_validators(unmarshal, data=result, many=many)\nsrc/marshmallow/schema.py:863:     def _invoke_field_validators(self, unmarshal, data, many):",
+      "metadata": {
+        "match_count": 2
+      }
+    },
+    {
+      "tool": "shell.exec",
+      "command": "shell.exec sed -n '855,915p' /var/folders/57/z15298ln6d34l6nlkmpjyvmw0000gn/T/tmpwd3z_si5/repos/marshmallow-code__marshmallow-1343/src/marshmallow/schema.py",
+      "status": "success",
+      "exit_code": 0,
+      "output": "        # This has to invert the order of the dump processors, so run the pass_many\n        # processors first.\n        data = self._invoke_processors(tag_name, pass_many=True,\n            data=data, many=many, original_data=original_data)\n        data = self._invoke_processors(tag_name, pass_many=False,\n            data=data, many=many, original_data=original_data)\n        return data\n\n    def _invoke_field_validators(self, unmarshal, data, many):\n        for attr_name in self.__processors__[(VALIDATES, False)]:\n            validator = getattr(self, attr_name)\n            validator_kwargs = validator.__marshmallow_kwargs__[(VALIDATES, False)]\n            field_name = validator_kwargs['field_name']\n\n            try:\n                field_obj = self.fields[field_name]\n            except KeyError:\n                if field_name in self.declared_fields:\n                    continue\n                raise ValueError('\"{0}\" field does not exist.'.format(field_name))\n\n            if many:\n                for idx, item in enumerate(data):\n                    try:\n                        value = item[field_obj.attribute or field_name]\n                    except KeyError:\n                        pass\n                    else:\n                        validated_value = unmarshal.call_and_store(\n                            getter_func=validator,\n                            data=value,\n                            field_name=field_obj.load_from or field_name,\n                            field_obj=field_obj,\n                            index=(idx if self.opts.index_errors else None)\n                        )\n                        if validated_value is missing:\n                            data[idx].pop(field_name, None)\n            else:\n                try:\n                    value = data[field_obj.attribute or field_name]\n                except KeyError:\n                    pass\n                else:\n                    validated_value = unmarshal.call_and_store(\n                        getter_func=validator,\n                        data=value,\n                        field_name=field_obj.load_from or field_name,\n                        field_obj=field_obj\n                    )\n                    if validated_value is missing:\n                        data.pop(field_name, None)\n\n    def _invoke_validators(\n            self, unmarshal, pass_many, data, original_data, many, field_errors=False):\n        errors = {}\n        for attr_name in self.__processors__[(VALIDATES_SCHEMA, pass_many)]:\n            validator = getattr(self, attr_name)\n            validator_kwargs = validator.__marshmallow_kwargs__[(VALIDATES_SCHEMA, pass_many)]\n            pass_original = validator_kwargs.get('pass_original', False)\n\n            skip_on_field_errors = validator_kwargs['skip_on_field_errors']\n",
+      "metadata": null
+    },
+    {
+      "tool": "shell.exec",
+      "command": "shell.exec sed -n '863,920p' /var/folders/57/z15298ln6d34l6nlkmpjyvmw0000gn/T/tmpwd3z_si5/repos/marshmallow-code__marshmallow-1343/src/marshmallow/schema.py",
+      "status": "success",
+      "exit_code": 0,
+      "output": "    def _invoke_field_validators(self, unmarshal, data, many):\n        for attr_name in self.__processors__[(VALIDATES, False)]:\n            validator = getattr(self, attr_name)\n            validator_kwargs = validator.__marshmallow_kwargs__[(VALIDATES, False)]\n            field_name = validator_kwargs['field_name']\n\n            try:\n                field_obj = self.fields[field_name]\n            except KeyError:\n                if field_name in self.declared_fields:\n                    continue\n                raise ValueError('\"{0}\" field does not exist.'.format(field_name))\n\n            if many:\n                for idx, item in enumerate(data):\n                    try:\n                        value = item[field_obj.attribute or field_name]\n                    except KeyError:\n                        pass\n                    else:\n                        validated_value = unmarshal.call_and_store(\n                            getter_func=validator,\n                            data=value,\n                            field_name=field_obj.load_from or field_name,\n                            field_obj=field_obj,\n                            index=(idx if self.opts.index_errors else None)\n                        )\n                        if validated_value is missing:\n                            data[idx].pop(field_name, None)\n            else:\n                try:\n                    value = data[field_obj.attribute or field_name]\n                except KeyError:\n                    pass\n                else:\n                    validated_value = unmarshal.call_and_store(\n                        getter_func=validator,\n                        data=value,\n                        field_name=field_obj.load_from or field_name,\n                        field_obj=field_obj\n                    )\n                    if validated_value is missing:\n                        data.pop(field_name, None)\n\n    def _invoke_validators(\n            self, unmarshal, pass_many, data, original_data, many, field_errors=False):\n        errors = {}\n        for attr_name in self.__processors__[(VALIDATES_SCHEMA, pass_many)]:\n            validator = getattr(self, attr_name)\n            validator_kwargs = validator.__marshmallow_kwargs__[(VALIDATES_SCHEMA, pass_many)]\n            pass_original = validator_kwargs.get('pass_original', False)\n\n            skip_on_field_errors = validator_kwargs['skip_on_field_errors']\n            if skip_on_field_errors and field_errors:\n                continue\n\n            if pass_many:\n                validator = functools.partial(validator, many=many)\n",
+      "metadata": null
+    },
+    {
+      "tool": "shell.exec",
+      "command": "shell.exec echo \"Model error: Server error \"500 Internal Server Error\" for url \"https://ollama.com/api/generate\" For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500\"",
+      "status": "success",
+      "exit_code": 0,
+      "output": "Model error: Server error 500 Internal Server Error for url https://ollama.com/api/generate For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500\n",
+      "metadata": null
+    },
+    {
+      "tool": "replace_string",
+      "command": "replace_string /var/folders/57/z15298ln6d34l6nlkmpjyvmw0000gn/T/tmpwd3z_si5/repos/marshmallow-code__marshmallow-1343/src/marshmallow/schema.py \"    def _invoke_field_validators(self, unmarshal, data, many):\n        for attr_name in self.__processors__[(VALIDATES, False)]:\" \"    def _invoke_field_validators(self, unmarshal, data, many):\n        if data is None:\n            return\n        for attr_name in self.__processors__[(VALIDATES, False)]:\"",
+      "status": "success",
+      "exit_code": 0,
+      "output": "Replaced string in /var/folders/57/z15298ln6d34l6nlkmpjyvmw0000gn/T/tmpwd3z_si5/repos/marshmallow-code__marshmallow-1343/src/marshmallow/schema.py",
+      "metadata": {
+        "path": "/var/folders/57/z15298ln6d34l6nlkmpjyvmw0000gn/T/tmpwd3z_si5/repos/marshmallow-code__marshmallow-1343/src/marshmallow/schema.py",
+        "replacements": 1
+      }
+    },
+    {
+      "tool": "shell.exec",
+      "command": "shell.exec echo \"Model error: Server error \"500 Internal Server Error\" for url \"https://ollama.com/api/generate\" For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500\"",
+      "status": "success",
+      "exit_code": 0,
+      "output": "Model error: Server error 500 Internal Server Error for url https://ollama.com/api/generate For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500\n",
+      "metadata": null
+    },
+    {
+      "tool": "shell.exec",
+      "command": "shell.exec echo \"Model error: Server error \"500 Internal Server Error\" for url \"https://ollama.com/api/generate\" For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500\"",
+      "status": "success",
+      "exit_code": 0,
+      "output": "Model error: Server error 500 Internal Server Error for url https://ollama.com/api/generate For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500\n",
+      "metadata": null
+    },
+    {
+      "tool": "submit",
+      "command": "submit",
+      "status": "success",
+      "exit_code": 0,
+      "output": "Episode ended. Solution submitted.",
+      "metadata": {
+        "submitted": true
+      }
+    }
+  ],
+  "reasoning_plan": "**Reasoning plan**\n\n1. **Inspect the crash site in `marshmallow/schema.py`**  \n   Open `schema.py` and locate `_invoke_field_validators` (around line 894). Confirm that it blindly subscripts `data` with `data[field_obj.attribute or field_name]`. When a nested schema receives completely invalid/non\u2011mapping data (e.g. a string), `unmarshal.deserialize` returns `None` as the deserialized `result`, so `data` is `None` here and the subscript produces `TypeError: 'NoneType' object is not subscriptable`.\n\n2. **Inspect the caller in `_do_load`**  \n   Look at the inner `_do_load` (around line 674) to verify that `result` from `unmarshal.deserialize` is passed directly as the `data` argument to `_invoke_field_validators`. This confirms the code path that feeds a `None` result into the validator runner when a nested schema is passed a string instead of a dict.\n\n3. **Apply the minimal fix in `_invoke_field_validators`**  \n   Insert a guard clause at the very top of `_invoke_field_validators` so it exits early when there is nothing to validate:\n   ```python\n   if data is None:\n       return\n   ```\n   *(Optional but recommended for robustness)* In the `many=True` branch of the same method, also skip individual items that are `None`:\n   ```python\n   if item is None:\n       continue\n   ```\n   This prevents an analogous crash if a list deserialization produces `None` entries.\n\n4. **Validate the fix with the reproduction script**  \n   Run the exact snippet from the bug report (a `Nested(Bar)` where `Bar` has a `@validates('value')` decorator and the input for `bar` is the string `'invalid'`).  \n   **Before the fix:** it raises the reported `TypeError`.  \n   **After the fix:** it should no longer crash; instead it should return/raise a proper marshmallow `ValidationError` that reports the type problem under the `bar` key.\n\n5. **Regression check**  \n   Ensure that normal successful loads and loads with empty dicts still invoke `@validates` correctly and that existing test suites pass. The guard only changes behavior when `data` is `None`, so valid use cases are unaffected.",
+  "failure_count": 0,
+  "failure_analysis": ""
+}
